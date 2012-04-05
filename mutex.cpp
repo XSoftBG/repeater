@@ -56,6 +56,8 @@ mutex_init( mutex_t * mutex )
 	int retVal;
 	pthread_mutexattr_t mutexattr;
 
+	pthread_mutexattr_init(&mutexattr);
+
 	// Set the mutex as a recursive mutex
 	pthread_mutexattr_settype(&mutexattr, PTHREAD_MUTEX_RECURSIVE_NP);
 
