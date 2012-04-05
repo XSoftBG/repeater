@@ -427,7 +427,7 @@ server_listen(LPVOID lpParam)
 			}
 #ifdef _DEBUG
 			else {
-				debug("Server (socket=%d) sent the host ID:%lu.\n", connection, code );
+				debug("Server (socket=%d) sent the host ID:%d.\n", connection, code );
 			}
 #endif
 
