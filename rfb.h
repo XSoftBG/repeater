@@ -32,11 +32,12 @@
 #define RFB_H__
 
 // Define the CARD* types as used in X11/Xmd.h
+#include <stdint.h>
 
-typedef unsigned long CARD32;
-typedef unsigned short CARD16;
-typedef short INT16;
-typedef unsigned char  CARD8;
+typedef int32_t CARD32;
+typedef uint16_t CARD16;
+typedef int16_t INT16;
+typedef uint8_t  CARD8;
 
 // include the protocol spec
 #include "rfbproto.h"
