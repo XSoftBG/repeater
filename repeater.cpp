@@ -180,12 +180,12 @@ THREAD_CALL
 do_repeater(LPVOID lpParam)
 {
 	/** vars for viewer input data **/
-	char viewerbuf[1024];        /* viewer input buffer */
+	char viewerbuf[4096];        /* viewer input buffer */
 	unsigned int viewerbuf_len;  /* available data in viewerbuf */
 	int f_viewer;                /* read viewer input more? */ 
 
 	/** vars for server input data **/
-	char serverbuf[1024];        /* server input buffer */
+	char serverbuf[4096];        /* server input buffer */
 	unsigned int serverbuf_len;  /* available data in serverbuf */
 	int f_server;                /* read server input more? */
 
@@ -195,17 +195,12 @@ do_repeater(LPVOID lpParam)
 	fd_set ofds; 
 	CARD8 client_init;
 	repeaterslot *slot;
-	struct timeval tm;
 	int selres;
 
 	slot = (repeaterslot *)lpParam;
 	
 	viewerbuf_len = 0;
 	serverbuf_len = 0;
-
-	// Timeout
-	tm.tv_sec= 0;
-	tm.tv_usec = 50;
 
 	debug("do_reapeater(): Starting repeater for ID %lu.\n", slot->code);
 
@@ -244,7 +239,7 @@ do_repeater(LPVOID lpParam)
 				FD_SET(slot->server, &ifds);
 			} 
 
-			selres = select(nfds, &ifds, &ofds, NULL, &tm);
+			selres = select(nfds, &ifds, &ofds, NULL, NULL);
 			if( selres == -1 ) {
 				/* some error */
 				error("do_repeater(): select() failed, errno=%d\n", errno);
@@ -998,9 +993,9 @@ int main(int argc, char **argv)
 		
 		/* Take a "nap" so CPU usage doesn't go up. */
 #ifdef WIN32
-		Sleep( 50 );
+		Sleep( 50000 );
 #else
-		usleep( 50 );
+		usleep( 50000 );
 #endif
 	}
 
