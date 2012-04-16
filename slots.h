@@ -23,6 +23,7 @@
 #ifndef _SLOTS_H
 #define _SLOTS_H
 
+#include <json/json.h>
 #include "mutex.h"
 
 
@@ -50,6 +51,8 @@ void FreeSlots( void );
 
 repeaterslot * AddSlot(repeaterslot *slot);
 void CleanupSlots( void );
+void ListSlots( void );
+const char * DumpSlots( void );
 void  FreeSlot(repeaterslot *slot);
 repeaterslot * AddServer(SOCKET s, char * code);
 repeaterslot * AddViewer(SOCKET s, unsigned char * challenge);

@@ -55,9 +55,6 @@
 #define _stricmp strcasecmp
 #endif
 
-#define TRUE	1
-#define FALSE	0 
-
 #define MAX_HOST_NAME_LEN	250
 
 // Structures
@@ -854,6 +851,7 @@ void usage(char * appname)
 	fprintf(stderr, "\nUsage: %s [-server port] [-viewer port]\n\n", appname);
 	fprintf(stderr, "  -server port  Defines the listening port for incoming VNC Server connections.\n");
 	fprintf(stderr, "  -viewer port  Defines the listening port for incoming VNC viewer connections.\n");
+	fprintf(stderr, "  --dump file  Defines the file to dump the json representation of current connections.\n");
 	fprintf(stderr, "\nFor more information please visit http://code.google.com/p/vncrepeater\n\n");
 
 	exit(1);
@@ -872,6 +870,7 @@ int main(int argc, char **argv)
 	u_short server_port;
 	u_short viewer_port;
 	int t_result;
+  char * dump_file = NULL;
 	thread_t hServerThread;
 	thread_t hViewerThread;
 
@@ -924,7 +923,15 @@ int main(int argc, char **argv)
 				}
 
 				i++;
-			} else {
+			} else if ( _stricmp( argv[i], "-dump" ) == 0 ) {
+        if( (i+i) == argc ) {
+					usage( argv[0] );
+					return 1;
+				}
+
+				dump_file = argv[(i+1)];
+        i++; 
+      } else {
 				usage( argv[0] );
 				return 1;
 			}
@@ -990,12 +997,20 @@ int main(int argc, char **argv)
 	{ 
 		/* Clean slots: Free slots where the endpoint has disconnected */
 		CleanupSlots();
-		
+    if (dump_file != NULL) {
+      int dump_fd = open (dump_file, O_CREAT | O_TRUNC | O_WRONLY);
+      const char * json = DumpSlots();
+      if (json != NULL) 
+        write (dump_fd, json, strlen(json));	
+      close (dump_fd);
+      free( (void *) json);
+    }
+
 		/* Take a "nap" so CPU usage doesn't go up. */
 #ifdef WIN32
 		Sleep( 50000 );
 #else
-		usleep( 50000 );
+		usleep( 5000000 );
 #endif
 	}
 

@@ -1,0 +1,31 @@
+<html>
+<head>
+<script type="text/javascript" src="jquery-1.7.2.min.js" > </script>
+</head>
+
+
+<body>
+<table id="users">
+<tr> 
+  <th> Id </th>
+  <th> Server </th>
+  <th> Viewer </th>
+</tr>
+
+
+</table>
+
+<script type="text/javascript">
+  $(document).ready(function(){
+   $.getJSON('dump.json', function(result) { 
+     $.each(result, function (i,field){
+       var row = "<tr><td>" + field.Id +"</td><td>" + field.addr + "</td><td>" + field.viewer_addr +  "</td></tr>";
+       $('#users ').append(row);
+     });
+   });
+});
+
+</script>
+<div></div>
+</body>
+</html>

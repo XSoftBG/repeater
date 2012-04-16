@@ -30,6 +30,10 @@
 #include "vncauth.h" /* CHALLENGESIZE */
 #include "repeater.h"
 #include "slots.h"
+#include <errno.h>
+#include <stdio.h>
+#include <json/json.h>
+
 
 
 repeaterslot * Slots;
@@ -516,3 +520,89 @@ FreeSlot(repeaterslot *slot)
 #endif
 }
 
+void
+ListSlots( void )
+{
+	repeaterslot *current;
+  struct sockaddr_in  addr;
+  socklen_t addrlen = sizeof(addr);
+	if( LockSlots("ListSlots()") != 0 )
+		return ;
+
+	current = Slots;
+#ifdef _DEBUG
+	debug("Listing current connections.\n");
+#endif
+	while( current != NULL)
+	{
+	  if( current->server != INVALID_SOCKET ) {
+      if( getpeername( (int)current->server, (struct sockaddr *)&addr, &addrlen) == 0 )
+        debug("server connected with id=%d from %s", current->code, inet_ntoa(addr.sin_addr));
+      else 
+        perror("getpeername() failed");
+      if ( current->viewer != INVALID_SOCKET )
+        if( getpeername( (int)current->viewer, (struct sockaddr *)&addr, &addrlen) == 0 )
+          debug("with viewer from %s", inet_ntoa(addr.sin_addr));
+        else 
+          perror("getpeername() failed");
+      else 
+        debug("without viewer \n");
+    }
+    current = current->next;
+	}
+
+#ifdef _DEBUG
+	debug("End of Listing");
+#endif
+	UnlockSlots("ListSlots()");
+}
+
+
+
+const char * DumpSlots( void) {
+  json_object *root = json_object_new_object();
+  json_object *servers = json_object_new_array();
+ 	repeaterslot *current;
+  struct sockaddr_in  addr;
+  socklen_t addrlen = sizeof(addr);
+	if( LockSlots("DumpSlots()") != 0 )
+		return NULL;
+
+	current = Slots;
+#ifdef _DEBUG
+	debug("Dumping current connections.\n");
+#endif
+	while( current != NULL)
+	{
+    json_object *server = json_object_new_object();
+    json_object *id = json_object_new_int(current->code);
+    json_object_object_add(server,"Id", id);
+
+	  if( current->server != INVALID_SOCKET ) {
+      if( getpeername( (int)current->server, (struct sockaddr *)&addr, &addrlen) == 0 ) {
+        json_object *server_addr = json_object_new_string(inet_ntoa(addr.sin_addr));
+        json_object_object_add(server,"addr", server_addr);
+      } else {
+        perror("getpeername() failed");
+      }
+      if ( current->viewer != INVALID_SOCKET ) {
+        if( getpeername( (int)current->viewer, (struct sockaddr *)&addr, &addrlen) == 0 ) {
+          json_object *viewer_addr = json_object_new_string(inet_ntoa(addr.sin_addr));
+          json_object_object_add(server,"viewer_addr", viewer_addr);
+        } else {
+          perror("getpeername() failed");
+        }
+      }
+    }
+    json_object_array_add(servers,server);
+    current = current->next;
+	}
+
+#ifdef _DEBUG
+	debug("End of Dumping.\n");
+#endif
+	UnlockSlots("DumpSlots()");
+
+  json_object_object_add(root, "Servers:", servers);
+  return json_object_to_json_string(servers);  
+}
