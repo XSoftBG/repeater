@@ -998,7 +998,7 @@ int main(int argc, char **argv)
 		/* Clean slots: Free slots where the endpoint has disconnected */
 		CleanupSlots();
     if (dump_file != NULL) {
-      int dump_fd = open (dump_file, O_CREAT | O_TRUNC | O_WRONLY);
+      int dump_fd = open (dump_file, O_CREAT | O_TRUNC | O_WRONLY, 0644);
       const char * json = DumpSlots();
       if (json != NULL) 
         write (dump_fd, json, strlen(json));	
