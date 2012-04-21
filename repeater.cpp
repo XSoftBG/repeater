@@ -999,11 +999,11 @@ int main(int argc, char **argv)
 		CleanupSlots();
     if (dump_file != NULL) {
       int dump_fd = open (dump_file, O_CREAT | O_TRUNC | O_WRONLY, 0644);
-      const char * json = DumpSlots();
+      char * json = DumpSlots();
       if (json != NULL) 
         write (dump_fd, json, strlen(json));	
       close (dump_fd);
-      free( (void *) json);
+      delete[] json;
     }
 
 		/* Take a "nap" so CPU usage doesn't go up. */

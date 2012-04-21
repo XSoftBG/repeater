@@ -52,7 +52,7 @@ void FreeSlots( void );
 repeaterslot * AddSlot(repeaterslot *slot);
 void CleanupSlots( void );
 void ListSlots( void );
-const char * DumpSlots( void );
+char * DumpSlots( void );
 void  FreeSlot(repeaterslot *slot);
 repeaterslot * AddServer(SOCKET s, char * code);
 repeaterslot * AddViewer(SOCKET s, unsigned char * challenge);

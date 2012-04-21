@@ -559,8 +559,7 @@ ListSlots( void )
 
 
 
-const char * DumpSlots( void) {
-  json_object *root = json_object_new_object();
+char * DumpSlots( void ) {
   json_object *servers = json_object_new_array();
  	repeaterslot *current;
   struct sockaddr_in  addr;
@@ -577,11 +576,13 @@ const char * DumpSlots( void) {
     json_object *server = json_object_new_object();
     json_object *id = json_object_new_int(current->code);
     json_object_object_add(server,"Id", id);
+    json_object_put(id);
 
 	  if( current->server != INVALID_SOCKET ) {
       if( getpeername( (int)current->server, (struct sockaddr *)&addr, &addrlen) == 0 ) {
         json_object *server_addr = json_object_new_string(inet_ntoa(addr.sin_addr));
         json_object_object_add(server,"addr", server_addr);
+        json_object_put(server_addr);
       } else {
         perror("getpeername() failed");
       }
@@ -589,12 +590,14 @@ const char * DumpSlots( void) {
         if( getpeername( (int)current->viewer, (struct sockaddr *)&addr, &addrlen) == 0 ) {
           json_object *viewer_addr = json_object_new_string(inet_ntoa(addr.sin_addr));
           json_object_object_add(server,"viewer_addr", viewer_addr);
+          json_object_put(viewer_addr);
         } else {
           perror("getpeername() failed");
         }
       }
     }
     json_object_array_add(servers,server);
+    json_object_put(server);
     current = current->next;
 	}
 
@@ -602,7 +605,9 @@ const char * DumpSlots( void) {
 	debug("End of Dumping.\n");
 #endif
 	UnlockSlots("DumpSlots()");
-
-  json_object_object_add(root, "Servers:", servers);
-  return json_object_to_json_string(servers);  
+  const char * result = json_object_to_json_string(servers);  
+  char * dest = new char[strlen(result) + 1];
+  strcpy(dest, result);
+  json_object_put(servers);
+  return dest;
 }
