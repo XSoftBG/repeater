@@ -851,7 +851,7 @@ void usage(char * appname)
 	fprintf(stderr, "\nUsage: %s [-server port] [-viewer port]\n\n", appname);
 	fprintf(stderr, "  -server port  Defines the listening port for incoming VNC Server connections.\n");
 	fprintf(stderr, "  -viewer port  Defines the listening port for incoming VNC viewer connections.\n");
-	fprintf(stderr, "  --dump file  Defines the file to dump the json representation of current connections.\n");
+	fprintf(stderr, "  -dump file  Defines the file to dump the json representation of current connections.\n");
 	fprintf(stderr, "\nFor more information please visit http://code.google.com/p/vncrepeater\n\n");
 
 	exit(1);
