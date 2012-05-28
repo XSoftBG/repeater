@@ -23,7 +23,6 @@
 #ifndef _SLOTS_H
 #define _SLOTS_H
 
-#include <json/json.h>
 #include "mutex.h"
 
 

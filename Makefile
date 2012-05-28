@@ -1,6 +1,6 @@
 
 CC = g++
-CCFLAGS = -Wall -ljson
+CCFLAGS = -Wall 
 LDFLAGS = -lpthread -lrt
 PROGNAME = repeater
 

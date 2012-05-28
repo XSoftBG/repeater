@@ -55,6 +55,10 @@
 #define _stricmp strcasecmp
 #endif
 
+#define TRUE   1
+#define FALSE  0 
+
+
 #define MAX_HOST_NAME_LEN	250
 
 // Structures
@@ -1001,7 +1005,7 @@ int main(int argc, char **argv)
       int dump_fd = open (dump_file, O_CREAT | O_TRUNC | O_WRONLY, 0644);
       char * json = DumpSlots();
       if (json != NULL) 
-        write (dump_fd, json, strlen(json));	
+        write (dump_fd, json, strlen(json) );	
       close (dump_fd);
       delete[] json;
     }
