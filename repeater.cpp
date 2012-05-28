@@ -203,7 +203,7 @@ do_repeater(LPVOID lpParam)
 	viewerbuf_len = 0;
 	serverbuf_len = 0;
 
-	debug("do_reapeater(): Starting repeater for ID %lu.\n", slot->code);
+	debug("do_reapeater(): Starting repeater for ID %d.\n", slot->code);
 
 	// Send ClientInit to the server to start repeating
 	client_init = 1;

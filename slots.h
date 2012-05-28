@@ -31,7 +31,7 @@ typedef struct _repeaterslot
 	SOCKET server;
 	SOCKET viewer;
 	unsigned long timestamp;
-	unsigned long code;
+	uint32_t code;
 	unsigned char challenge[CHALLENGESIZE];
 
 	struct _repeaterslot * next;
