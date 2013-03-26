@@ -207,7 +207,7 @@ do_repeater(LPVOID lpParam)
 
 	// Send ClientInit to the server to start repeating
 	client_init = 1;
-	if( WriteExact(slot->server, (char *)&client_init, 1) < 0 ) {
+	if( socket_write_exact(slot->server, (char *)&client_init, 1) < 0 ) {
 		error("do_repeater(): Writting ClientInit error.\n");
 		f_viewer = 0;              /* no, don't read from viewer */
 		f_server = 0;              /* no, don't read from server */
@@ -222,21 +222,23 @@ do_repeater(LPVOID lpParam)
 		f_server = 1;              /* yes, read from server */
 	}
 
+  nfds = (slot->server > slot->viewer ? slot->server : slot->viewer)+1;
+
 	// Start the repeater loop.
-	while( f_viewer && f_server)
+	while(f_viewer && f_server)
 	{
 		/* Bypass reading if there is still data to be sent in the buffers */
-		if( ( serverbuf_len == 0 ) && ( viewerbuf_len == 0 ) ) {
+		if( serverbuf_len == 0 && viewerbuf_len == 0 ) {
 			FD_ZERO( &ifds );
 			FD_ZERO( &ofds ); 
 
 			/** prepare for reading viewer input **/ 
-			if (f_viewer && (viewerbuf_len < sizeof(viewerbuf))) {
+			if (f_viewer && viewerbuf_len < sizeof(viewerbuf)) {
 				FD_SET(slot->viewer, &ifds);
 			} 
 
 			/** prepare for reading server input **/
-			if (f_server && (serverbuf_len < sizeof(serverbuf))) {
+			if (f_server && serverbuf_len < sizeof(serverbuf)) {
 				FD_SET(slot->server, &ifds);
 			} 
 
@@ -247,14 +249,10 @@ do_repeater(LPVOID lpParam)
 				f_viewer = 0;              /* no, don't read from viewer */
 				f_server = 0;              /* no, don't read from server */
 				continue;
-			} else if( selres == 0 ) {
-				/*Timeout */
-				continue;
-			}
-		
+			} 		
 
 			/* server => viewer */ 
-			if (FD_ISSET(slot->server, &ifds) && (serverbuf_len < sizeof(serverbuf))) { 
+			if (FD_ISSET(slot->server, &ifds) && serverbuf_len < sizeof(serverbuf)) { 
 				len = recv(slot->server, serverbuf + serverbuf_len, sizeof(serverbuf) - serverbuf_len, 0); 
 
 				if (len == 0) { 
@@ -276,7 +274,7 @@ do_repeater(LPVOID lpParam)
 			}
 
 			/* viewer => server */ 
-			if( FD_ISSET(slot->viewer, &ifds)  && (viewerbuf_len < sizeof(viewerbuf)) ) {
+			if( FD_ISSET(slot->viewer, &ifds)  && viewerbuf_len < sizeof(viewerbuf) ) {
 				len = recv(slot->viewer, viewerbuf + viewerbuf_len, sizeof(viewerbuf) - viewerbuf_len, 0);
 
 				if (len == 0) { 
@@ -1041,11 +1039,9 @@ int main(int argc, char **argv)
 		error("The viewer listener thread doesn't seem to exit cleanlly.\n");
 	}
 
-
-
-	 // Destroy mutex
-	 t_result = mutex_destroy( &mutex_slots );
-	 if( t_result != 0 ) {
+	// Destroy mutex
+  t_result = mutex_destroy( &mutex_slots );
+	if( t_result != 0 ) {
 #ifndef _DEBUG
 		 error("Failed to destroy mutex with error: %d\n", t_result);
 #else
@@ -1055,8 +1051,8 @@ int main(int argc, char **argv)
 
 #ifdef WIN32
 	 // Cleanup Winsock.
-	WinsockFinalize();
+	 WinsockFinalize();
 #endif
 
-	return 0;
+	 return 0;
 }

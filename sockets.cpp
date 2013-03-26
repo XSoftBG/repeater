@@ -64,7 +64,6 @@ WinsockInitialize( void )
 	return 1;
 }
 
-
 void
 WinsockFinalize( void )
 {
@@ -131,26 +130,6 @@ CreateListenerSocket(u_short port)
 	return sock;
 }
 
-
-
-//int 
-//ReadExact(int sock, char *buf, int len)
-//{
-//	int n;
-//
-//	while (len > 0) {
-//		n = recv(sock, buf, len, 0);
-//		if (n > 0) {
-//			buf += n;
-//			len -= n;
-//		} else {
-//			return n;
-//		}
-//	}
-//
-//	return 1;
-//}
-
 int 
 socket_read(SOCKET s, char * buff, socklen_t bufflen)
 {
@@ -172,41 +151,34 @@ socket_read(SOCKET s, char * buff, socklen_t bufflen)
 int 
 socket_read_exact(SOCKET s, char * buff, socklen_t bufflen)
 {
-	int bytes;
 	socklen_t currlen = bufflen;
 	fd_set read_fds;
-	struct timeval tm;
-	int count;
+	int n;
 
 	while (currlen > 0) {
 		// Wait until some data can be read
-		do {
-			FD_ZERO( &read_fds );
-			FD_SET( s, &read_fds );
+		FD_ZERO( &read_fds );
+		FD_SET( s, &read_fds );
 			
-			tm.tv_sec = 0;
-			tm.tv_usec = 50;
-			count = select( s + 1, &read_fds, NULL, NULL, &tm);
-		} while (count == 0);
-
-		if( count < 0 ) {
+		n = select(s + 1, &read_fds, NULL, NULL, NULL);
+		if( n < 0 ) {
 #ifdef WIN32
 			errno = WSAGetLastError();
 #endif
 			return -1;
-		} else if( count > 2 ) {
+		} else if( n > 2 ) {
 			error("socket error in select()\n");
 			return -1;
 		}
 		
 		if( FD_ISSET( s, &read_fds ) ) {
 			// Try to read some data in
-			bytes = socket_read(s, buff, currlen);
-			if (bytes > 0) {
+			n = socket_read(s, buff, currlen);
+			if (n > 0) {
 				// Adjust the buffer position and size
-				buff += bytes;
-				currlen -= bytes;
-			} else if ( bytes < 0 ) {
+				buff += n;
+				currlen -= n;
+			} else if ( n < 0 ) {
 #ifdef WIN32
 				errno = WSAGetLastError();
 #endif
@@ -214,7 +186,7 @@ socket_read_exact(SOCKET s, char * buff, socklen_t bufflen)
 					//error("socket error.\n");
 					return -1;
 				}
-			} else if (bytes == 0) {
+			} else if (n == 0) {
 				//error("zero bytes read\n");
 				errno = ENOTCONN;
 				return -1;
@@ -230,21 +202,25 @@ socket_write_exact(SOCKET s, char * buff, socklen_t bufflen)
 {
 	socklen_t currlen = bufflen;
 	fd_set write_fds;
-	struct timeval tm;
 	int n;
 
 	while (currlen > 0) {
 		// Wait until some data can be read
-		do {
-			FD_ZERO( &write_fds );
-			FD_SET( s, &write_fds );
-			
-			tm.tv_sec = 0;
-			tm.tv_usec = 50;
-			n = select( s + 1, NULL, &write_fds, NULL, &tm);
-		} while (n == 0);
+		FD_ZERO( &write_fds );
+		FD_SET( s, &write_fds );
+		
+		n = select(s + 1, NULL, &write_fds, NULL, NULL);
+		if( n < 0 ) {
+#ifdef WIN32
+			errno = WSAGetLastError();
+#endif
+			return -1;
+		} else if( n > 2 ) {
+			error("socket error in select()\n");
+			return -1;
+		}
 
-		n = send( s, buff, bufflen, 0);
+		n = send(s, buff, bufflen, 0);
 
 		if (n > 0) {
 			buff += n;
@@ -263,8 +239,6 @@ socket_write_exact(SOCKET s, char * buff, socklen_t bufflen)
 
 	return 1;
 }
-
-
 
 SOCKET 
 socket_accept(SOCKET s, struct sockaddr * addr, socklen_t * addrlen)
@@ -338,23 +312,3 @@ socket_close(SOCKET s)
 	return 0;
 }
 
-int 
-WriteExact(int sock, char *buf, int len)
-{
-	int n;
-
-	while (len > 0) {
-		n = send(sock, buf, len, 0);
-
-		if (n > 0) {
-			buf += n;
-			len -= n;
-		} else if (n == 0) {
-			error("WriteExact: write returned 0?\n");
-			return -1;
-		} else {
-			return n;
-		}
-	}
-	return 1;
-}
