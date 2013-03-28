@@ -359,8 +359,8 @@ server_listen(LPVOID lpParam)
 {
 	listener_thread_params *thread_params;
 	SOCKET connection;
-	struct sockaddr client;
-	socklen_t socklen;
+	struct sockaddr_in client;
+	socklen_t socklen = sizeof(client);
 	rfbProtocolVersionMsg protocol_version; 
 	char host_id[MAX_HOST_NAME_LEN + 1];
 	char phost[MAX_HOST_NAME_LEN + 1];
@@ -378,12 +378,11 @@ server_listen(LPVOID lpParam)
 		notstopped = FALSE;
 	} else {
 		debug("Listening for incoming server connections on port %d.\n", thread_params->port);
-		socklen = sizeof(client);
 	}
 
 	while( notstopped )
 	{
-		connection = socket_accept(thread_params->sock, &client, &socklen);
+		connection = socket_accept(thread_params->sock, (struct sockaddr *)&client, &socklen);
 		if( connection == INVALID_SOCKET ) {
 			if( notstopped )
 				debug("server_listen(): accept() failed, errno=%d\n", errno);
@@ -391,7 +390,7 @@ server_listen(LPVOID lpParam)
 				break;
 		} else {
 			/* IP Address for monitoring purposes */
-			ip_addr = inet_ntoa( ((struct sockaddr_in *)&client)->sin_addr );
+			ip_addr = inet_ntoa(client.sin_addr);
 #ifndef _DEBUG
 			debug("Server connection accepted from %s.\n", ip_addr);
 #else
@@ -574,8 +573,8 @@ viewer_listen(LPVOID lpParam)
 {
 	listener_thread_params *thread_params;
 	SOCKET connection;
-	struct sockaddr client;
-	socklen_t socklen;
+	struct sockaddr_in client;
+  socklen_t socklen = sizeof(client);
 	rfbProtocolVersionMsg protocol_version; 
 	CARD32 auth_type;
 	CARD32 auth_response;
@@ -592,13 +591,12 @@ viewer_listen(LPVOID lpParam)
 		notstopped = FALSE;
 	} else {
 		debug("Listening for incoming viewer connections on port %d.\n", thread_params->port);
-		socklen = sizeof(client);
 	}
 
 	// Main loop
 	while( notstopped )
 	{
-		connection = socket_accept(thread_params->sock, &client, &socklen);
+		connection = socket_accept(thread_params->sock, (struct sockaddr *)&client, &socklen);
 		if( connection == INVALID_SOCKET ) {
 			if( notstopped ) 
 				debug("viewer_listen(): accept() failed, errno=%d\n", errno);
@@ -606,7 +604,7 @@ viewer_listen(LPVOID lpParam)
 				break;
 		} else {
 			/* IP Address for monitoring purposes */
-			ip_addr = inet_ntoa( ((struct sockaddr_in *)&client)->sin_addr );
+			ip_addr = inet_ntoa(client.sin_addr);
 #ifndef _DEBUG
 			debug("Viewer connection accepted from %s.\n", ip_addr);
 #else
