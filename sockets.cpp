@@ -41,8 +41,7 @@ int errno;
  * Winsock specific functions
  *
  *****************************************************************************/
-int
-WinsockInitialize( void )
+int WinsockInitialize( void )
 {
 	WORD	wVersionRequested;
 	WSADATA	wsaData;
@@ -51,12 +50,12 @@ WinsockInitialize( void )
 	wVersionRequested = MAKEWORD(2, 2);
 
 	if( WSAStartup(wVersionRequested, &wsaData) != 0 ) {
-		fatal("main(): WSAStartup failed.\n");
+		log(FATAL, "main(): WSAStartup failed.\n");
 		return 0;
 	}
 
 	if (LOBYTE(wsaData.wVersion) != 2 || HIBYTE(wsaData.wVersion) != 2) {
-		fatal("main(): Could not find a usable version of Winsock.dll\n");
+		log(FATAL, "main(): Could not find a usable version of Winsock.dll\n");
 		WSACleanup();
 		return 0;
 	}
@@ -81,8 +80,7 @@ WinsockFinalize( void )
  *
  *****************************************************************************/
 
-SOCKET 
-CreateListenerSocket(u_short port)
+SOCKET CreateListenerSocket(u_short port)
 {
 	SOCKET              sock;
 	struct sockaddr_in  addr;
@@ -97,7 +95,7 @@ CreateListenerSocket(u_short port)
 	/* Initialize the socket */
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 	if( sock < 0 ) {
-		error("Failed to create a listening socket for port %d.\n", port);
+		logp(ERROR, "Failed to create a listening socket for port %d.\n", port);
 		return INVALID_SOCKET;
 	}
 
@@ -114,14 +112,14 @@ CreateListenerSocket(u_short port)
 
 	/* Bind the socket to the port */
 	if( bind(sock, (struct sockaddr *)&addr, sizeof(struct sockaddr)) < 0 ) {
-		error("Failed to bind socket on port %d.\n", port);
+		logp(ERROR, "Failed to bind socket on port %d.\n", port);
 		socket_close(sock);
 		return INVALID_SOCKET;
 	}
 
 	/* Start listening */
 	if( listen(sock, 5) < 0 ) {
-		error("Failed to start listening on port %d.\n", port);
+		logp(ERROR, "Failed to start listening on port %d.\n", port);
 		socket_close(sock);
 		return INVALID_SOCKET;
 	}
@@ -130,8 +128,7 @@ CreateListenerSocket(u_short port)
 	return sock;
 }
 
-int 
-socket_read(SOCKET s, char * buff, socklen_t bufflen)
+int  socket_read(SOCKET s, char * buff, socklen_t bufflen)
 {
 	int bytes;
 
@@ -148,8 +145,7 @@ socket_read(SOCKET s, char * buff, socklen_t bufflen)
 	return bytes;
 }
 
-int 
-socket_read_exact(SOCKET s, char * buff, socklen_t bufflen)
+int socket_read_exact(SOCKET s, char * buff, socklen_t bufflen)
 {
 	socklen_t currlen = bufflen;
 	fd_set read_fds;
@@ -167,7 +163,7 @@ socket_read_exact(SOCKET s, char * buff, socklen_t bufflen)
 #endif
 			return -1;
 		} else if( n > 2 ) {
-			error("socket error in select()\n");
+			log(ERROR, "socket error in select()\n");
 			return -1;
 		}
 		
@@ -183,22 +179,19 @@ socket_read_exact(SOCKET s, char * buff, socklen_t bufflen)
 				errno = WSAGetLastError();
 #endif
 				if( errno != EWOULDBLOCK) {
-					//error("socket error.\n");
 					return -1;
 				}
 			} else if (n == 0) {
-				//error("zero bytes read\n");
 				errno = ENOTCONN;
 				return -1;
 			}
 		}
-    }
+   }
 
 	return 0;
 }
 
-int 
-socket_write_exact(SOCKET s, char * buff, socklen_t bufflen)
+int socket_write_exact(SOCKET s, char * buff, socklen_t bufflen)
 {
 	socklen_t currlen = bufflen;
 	fd_set write_fds;
@@ -216,7 +209,7 @@ socket_write_exact(SOCKET s, char * buff, socklen_t bufflen)
 #endif
 			return -1;
 		} else if( n > 2 ) {
-			error("socket error in select()\n");
+			log(ERROR, "socket error in select()\n");
 			return -1;
 		}
 
@@ -226,7 +219,7 @@ socket_write_exact(SOCKET s, char * buff, socklen_t bufflen)
 			buff += n;
 			currlen -= n;
 		} else if (n == 0) {
-			error("WriteExact: write returned 0?\n");
+			log(ERROR, "WriteExact: write returned 0?\n");
 			return -1;
 		} else {
 			/* Negative value. This is an error! */
@@ -240,8 +233,7 @@ socket_write_exact(SOCKET s, char * buff, socklen_t bufflen)
 	return 1;
 }
 
-SOCKET 
-socket_accept(SOCKET s, struct sockaddr * addr, socklen_t * addrlen)
+SOCKET  socket_accept(SOCKET s, struct sockaddr * addr, socklen_t * addrlen)
 {
 	SOCKET sock;
 	const int one = 1;
@@ -269,23 +261,21 @@ socket_accept(SOCKET s, struct sockaddr * addr, socklen_t * addrlen)
 #endif
 		if( errno == ENOTSOCK )
 			return INVALID_SOCKET;
-#ifndef _DEBUG
-		debug("Failed to disable Nagle Algorithm.\n");
+		log(INFO, "Failed to disable Nagle Algorithm.\n");
 	} else {
-		debug("Nagle Alorithm has been disabled.\n");
-#endif
+		log(INFO, "Nagle Alorithm has been disabled.\n");
 	}
 
 	// Put the socket into non-blocking mode
 #ifdef WIN32
 	if (ioctlsocket( sock, FIONBIO, &ioctlsocket_arg) != 0) {
-		error("Failed to set socket in non-blocking mode.\n");
+		log(ERROR, "Failed to set socket in non-blocking mode.\n");
 		socket_close( sock );
 		return INVALID_SOCKET;
 	}
 #else
 	if (fcntl( sock, F_SETFL, O_NDELAY) != 0) {
-		error("Failed to set socket in non-blocking mode.\n");
+		log(ERROR, "Failed to set socket in non-blocking mode.\n");
 		socket_close( sock );
 		return INVALID_SOCKET;
 	}
@@ -294,8 +284,7 @@ socket_accept(SOCKET s, struct sockaddr * addr, socklen_t * addrlen)
 	return sock;
 }
 
-int 
-socket_close(SOCKET s)
+int socket_close(SOCKET s)
 {
 	errno = 0;
 

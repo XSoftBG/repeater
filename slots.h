@@ -24,6 +24,7 @@
 #define _SLOTS_H
 
 #include "mutex.h"
+#include <string>
 
 
 typedef struct _repeaterslot
@@ -51,7 +52,7 @@ void FreeSlots( void );
 repeaterslot * AddSlot(repeaterslot *slot);
 void CleanupSlots( void );
 void ListSlots( void );
-char * DumpSlots( void );
+std::string DumpSlots( void );
 void  FreeSlot(repeaterslot *slot);
 repeaterslot * AddServer(SOCKET s, char * code);
 repeaterslot * AddViewer(SOCKET s, unsigned char * challenge);

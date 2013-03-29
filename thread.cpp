@@ -64,8 +64,7 @@ thread_create(thread_t * thread, LPTHREAD_SECURITY_ATTRIBUTES attr, void *(*star
 	return 0;
 }
 
-int
-thread_join( thread_t thread, unsigned int seconds)
+int thread_join( thread_t thread, unsigned int seconds)
 {
 	int rc;
 #ifndef WIN32
@@ -84,44 +83,36 @@ thread_join( thread_t thread, unsigned int seconds)
 	return rc;
 }
 
-int
-thread_cleanup(thread_t thread, unsigned int seconds)
+int thread_cleanup(thread_t thread, unsigned int seconds)
 {
-	int rc;
-
-	rc = thread_join(thread, seconds);
-
+	int rc = thread_join(thread, seconds);
 	switch( rc )
 	{
-	case WAIT_OBJECT_0:
-		// Everything OK! Thread exited
-#ifdef WIN32
-		CloseHandle( thread );
-#endif
-		return 0;
-		break;
-	case WAIT_TIMEOUT:
-		// Damn! Should be closed by now... Force it!
-#ifndef WIN32
-		pthread_detach( thread );
-#endif
-		rc = thread_terminate( thread );
-#ifdef WIN32
-		if( rc == 0 ) CloseHandle( thread );
-#endif
-		return rc;
-		break;
-	default:
-		// WTF??? Something went really wrong.
-		fatal("Something went REALLY wrong while waiting for a thread to complete!\n");
+	  case WAIT_OBJECT_0:
+		  // Everything OK! Thread exited
+  #ifdef WIN32
+		  CloseHandle( thread );
+  #endif
+		  return 0;
+	  case WAIT_TIMEOUT:
+		  // Damn! Should be closed by now... Force it!
+  #ifndef WIN32
+		  pthread_detach( thread );
+  #endif
+		  rc = thread_terminate( thread );
+  #ifdef WIN32
+		  if( rc == 0 ) CloseHandle( thread );
+  #endif
+		  return rc;
+	  default:
+		  // WTF??? Something went really wrong.
+		  log(FATAL, "Something went REALLY wrong while waiting for a thread to complete!\n");
 	}
-
 	return rc;
 }
 
 
-int
-thread_terminate(thread_t thread)
+int thread_terminate(thread_t thread)
 {
 	int rc;
 

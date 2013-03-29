@@ -27,8 +27,7 @@
 
 #include "mutex.h"
 
-int
-mutex_destroy( mutex_t * mutex)
+int mutex_destroy( mutex_t * mutex)
 {
 #ifdef WIN32
 	if( CloseHandle( *mutex ) == 0 ) {
@@ -42,8 +41,7 @@ mutex_destroy( mutex_t * mutex)
 }
 
 
-int
-mutex_init( mutex_t * mutex )
+int mutex_init( mutex_t * mutex )
 {
 #ifdef WIN32
 	*mutex = (mutex_t)CreateMutex( NULL, FALSE, NULL);
@@ -72,8 +70,7 @@ mutex_init( mutex_t * mutex )
 }
 
 
-int
-mutex_lock( mutex_t * mutex )
+int mutex_lock( mutex_t * mutex )
 {
 #ifdef WIN32
 	DWORD dwWaitResult;
@@ -90,8 +87,7 @@ mutex_lock( mutex_t * mutex )
 }
 
 
-int
-mutex_unlock( mutex_t * mutex )
+int mutex_unlock( mutex_t * mutex )
 {
 #ifdef WIN32
 	if( ReleaseMutex( *mutex ) == 0 ) {

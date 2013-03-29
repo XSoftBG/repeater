@@ -35,11 +35,15 @@
 #include <time.h>
 #include <sys/stat.h> 
 #ifndef WIN32
-#include <string.h>
 #include <pthread.h>
 #include <netinet/tcp.h>	/* u_short */
 #include <unistd.h>
+#include <sys/time.h>
+#else
+#include <time.h>
 #endif
+#include <sys/timeb.h>
+#include <string>
 
 #include "thread.h"
 #include "sockets.h"
@@ -70,6 +74,8 @@ typedef struct _listener_thread_params {
 
 // Global variables
 int notstopped;
+int log_level = INFO;
+
 
 // Prototypes
 int ParseDisplay(char *display, char *phost, int hostlen, char *pport);
@@ -90,50 +96,84 @@ void ThreadCleanup(HANDLE hThread, DWORD dwMilliseconds);
  *
  *****************************************************************************/
 
-void debug(const char *fmt, ...)
+int64_t millitime()
 {
-	va_list args;
-	va_start(args, fmt);
-	fprintf(stderr, "UltraVNC> ");
-	vfprintf(stderr, fmt, args);
-	va_end(args);
+  struct timeb t;
+  ::ftime( &t );
+  return t.time * 1000LL + t.millitm;
 }
 
-
-
-void error( const char *fmt, ... )
+int64_t microtime()
 {
-	va_list args;
-	va_start( args, fmt );
-	fprintf(stderr, "ERROR: ");
-	vfprintf( stderr, fmt, args );
-	va_end( args );
+#ifdef WIN32
+  return ::millitime() * 1000LL;
+#else
+  struct timeval tv;
+  return ::gettimeofday( &tv, NULL ) ? 0LL : tv.tv_sec * 1000000LL + tv.tv_usec;
+#endif
 }
 
-
-
-void fatal(const char *fmt, ...)
+const char *microtime_str(int64_t t)
 {
-	va_list args;
-	va_start(args, fmt);
-	fprintf(stderr, "FATAL: ");
-	vfprintf(stderr, fmt, args);
-	va_end(args);
+  static char buf[40];
+  time_t time = int(t / 1000000LL);
+  int64_t milltime = t % 1000000LL;
+
+  size_t n = ::strftime( buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", ::localtime( &time ) );
+  sprintf( buf+n, ".%06d", (int)milltime );
+  return buf;
 }
 
-
-
-void report_bytes(char *prefix, char *buf, int len)
+const char * get_log_level_name(char level)
 {
-	// ToDo: If verbose parmeter is not set, return.
-	debug("%s", prefix);
-	while (0 < len) {
-		fprintf(stderr, " %02x", *(unsigned char *) buf);
-		buf++;
-		len--;
-	}
-	fprintf(stderr, "\n");
-	return;
+  switch(level)
+  {
+    case ERROR: return "ERROR";
+    case FATAL: return "FATAL";
+    case INFO:  return "INFO";
+    case DEBUG: return "DEBUG";
+    default:    return "???";
+  }
+}
+
+char get_log_level(std::string level_name)
+{
+  if( level_name == "ERROR") return ERROR;
+  else
+  if( level_name == "FATAL") return FATAL;
+  else
+  if( level_name == "INFO")  return INFO;
+  else
+  if( level_name == "DEBUG") return DEBUG;
+  else return -1;
+}
+
+int logger(char level, const char *fmt, ...)
+{
+  static char buffer[32*1024]; // max 8k message
+
+  if( ::log_level >= level )
+  { 
+    va_list args;
+    va_start(args, fmt);
+    const char *ts = ::microtime_str( ::microtime() );
+    const char * str_level = get_log_level_name(level);
+    size_t sz = snprintf( buffer, sizeof(buffer)-40, "[%s][%s] ", ts, str_level);
+    int n = vsnprintf( buffer+sz, sizeof(buffer)-40-sz, fmt, args);
+    if( n > 0 )
+      sz += n;
+    if( n < 0 || sz >= sizeof(buffer)-40 )
+    {
+      sz = sizeof(buffer)-40;
+      const char *msg = "... \n**** MESSAGE TRUNCATED ****\n";
+      strcpy( buffer+sz, msg );
+      sz += strlen(msg);
+    }
+    va_end(args);
+    fprintf(stderr, "%s", buffer);
+    return 1;
+  }
+  return 0;
 }
 
 
@@ -157,15 +197,15 @@ int ParseDisplay(char *display, char *phost, int hostlen, int *pport, unsigned c
 	strncpy(phost, display, colonpos - display);
 	phost[colonpos - display]  = '\0';
 
-	memset(&tmp_id, 0, sizeof(tmp_id));
+	memset(tmp_id, 0, sizeof(tmp_id));
 	if( sscanf(colonpos + 1, "%d", &tmp_code) != 1 ) return FALSE;
-	if( sscanf(colonpos + 1, "%s", (char *)&tmp_id) != 1 ) return FALSE;
+	if( sscanf(colonpos + 1, "%s", tmp_id) != 1 ) return FALSE;
 
 	// encrypt
-	memcpy(&challenge, challenge_key, CHALLENGESIZE);
+	memcpy(challenge, challenge_key, CHALLENGESIZE);
 	vncEncryptBytes(challenge, tmp_id);
 
-	memcpy((unsigned char *)challengedid, challenge, CHALLENGESIZE);
+	memcpy(challengedid, challenge, CHALLENGESIZE);
 	*pport = tmp_code;
 	return TRUE;
 }
@@ -177,8 +217,7 @@ int ParseDisplay(char *display, char *phost, int hostlen, int *pport, unsigned c
  *
  *****************************************************************************/
 
-THREAD_CALL 
-do_repeater(LPVOID lpParam)
+THREAD_CALL do_repeater(LPVOID lpParam)
 {
 	/** vars for viewer input data **/
 	char viewerbuf[4096];        /* viewer input buffer */
@@ -203,12 +242,12 @@ do_repeater(LPVOID lpParam)
 	viewerbuf_len = 0;
 	serverbuf_len = 0;
 
-	debug("do_reapeater(): Starting repeater for ID %d.\n", slot->code);
+	logp(DEBUG, "do_reapeater(): Starting repeater for ID %d.\n", slot->code);
 
 	// Send ClientInit to the server to start repeating
 	client_init = 1;
 	if( socket_write_exact(slot->server, (char *)&client_init, 1) < 0 ) {
-		error("do_repeater(): Writting ClientInit error.\n");
+		log(ERROR, "do_repeater(): Writting ClientInit error.\n");
 		f_viewer = 0;              /* no, don't read from viewer */
 		f_server = 0;              /* no, don't read from server */
 	} else {
@@ -245,7 +284,7 @@ do_repeater(LPVOID lpParam)
 			selres = select(nfds, &ifds, &ofds, NULL, NULL);
 			if( selres == -1 ) {
 				/* some error */
-				error("do_repeater(): select() failed, errno=%d\n", errno);
+				logp(ERROR, "do_repeater(): select() failed, errno=%d\n", errno);
 				f_viewer = 0;              /* no, don't read from viewer */
 				f_server = 0;              /* no, don't read from server */
 				continue;
@@ -256,7 +295,7 @@ do_repeater(LPVOID lpParam)
 				len = recv(slot->server, serverbuf + serverbuf_len, sizeof(serverbuf) - serverbuf_len, 0); 
 
 				if (len == 0) { 
-					debug("do_repeater(): connection closed by server.\n");
+					log(DEBUG, "do_repeater(): connection closed by server.\n");
 					f_server = 0;              /* no, don't read from server */
 					continue;
 				} else if ( len == -1 ) {
@@ -264,7 +303,7 @@ do_repeater(LPVOID lpParam)
 #ifdef WIN32
 					errno = WSAGetLastError();
 #endif
-					error("Error reading from socket. Socket error = %d.\n", errno );
+					logp(ERROR, "Error reading from socket. Socket error = %d.\n", errno );
 					f_server = 0;              /* no, don't read from server */
 					continue;
 				} else {
@@ -278,7 +317,7 @@ do_repeater(LPVOID lpParam)
 				len = recv(slot->viewer, viewerbuf + viewerbuf_len, sizeof(viewerbuf) - viewerbuf_len, 0);
 
 				if (len == 0) { 
-					debug("do_repeater(): connection closed by viewer.\n");
+					log(DEBUG, "do_repeater(): connection closed by viewer.\n");
 					// ToDo: Leave ready, but don't remove it...
 					f_viewer = 0;
 					continue;
@@ -287,7 +326,7 @@ do_repeater(LPVOID lpParam)
 #ifdef WIN32
 					errno = WSAGetLastError();
 #endif
-					error("Error reading from socket. Socket error = %d.\n", errno );
+					logp(ERROR, "Error reading from socket. Socket error = %d.\n", errno );
 					f_viewer = 0;
 					continue;
 				} else {
@@ -306,7 +345,7 @@ do_repeater(LPVOID lpParam)
 				errno = WSAGetLastError();
 #endif
 				if( errno != EWOULDBLOCK ) {
-					debug("do_repeater(): send() failed, viewer to server. Socket error = %d\n", errno);
+					logp(DEBUG, "do_repeater(): send() failed, viewer to server. Socket error = %d\n", errno);
 					f_server = 0;
 				}
 				continue;
@@ -330,7 +369,7 @@ do_repeater(LPVOID lpParam)
 				errno = WSAGetLastError();
 #endif
 				if( errno != EWOULDBLOCK ) {
-					debug("do_repeater(): send() failed, server to viewer. Socket error = %d\n", errno);
+					logp(DEBUG, "do_repeater(): send() failed, server to viewer. Socket error = %d\n", errno);
 					f_viewer = 0;
 				}
 				continue;
@@ -348,14 +387,13 @@ do_repeater(LPVOID lpParam)
 
 	/** When the thread exits **/
 	FreeSlot( slot );
-	debug("Repeater thread closed.\n");
+	log(INFO, "Repeater thread closed.\n");
 	return 0;
 }
 
 
 
-THREAD_CALL
-server_listen(LPVOID lpParam)
+THREAD_CALL server_listen(LPVOID lpParam)
 {
 	listener_thread_params *thread_params;
 	SOCKET connection;
@@ -377,7 +415,7 @@ server_listen(LPVOID lpParam)
 	if ( thread_params->sock == INVALID_SOCKET ) {
 		notstopped = FALSE;
 	} else {
-		debug("Listening for incoming server connections on port %d.\n", thread_params->port);
+		logp(DEBUG, "Listening for incoming server connections on port %d.\n", thread_params->port);
 	}
 
 	while( notstopped )
@@ -385,100 +423,65 @@ server_listen(LPVOID lpParam)
 		connection = socket_accept(thread_params->sock, (struct sockaddr *)&client, &socklen);
 		if( connection == INVALID_SOCKET ) {
 			if( notstopped )
-				debug("server_listen(): accept() failed, errno=%d\n", errno);
+				logp(ERROR, "server_listen(): accept() failed, errno=%d\n", errno);
 			else
 				break;
 		} else {
 			/* IP Address for monitoring purposes */
 			ip_addr = inet_ntoa(client.sin_addr);
-#ifndef _DEBUG
-			debug("Server connection accepted from %s.\n", ip_addr);
-#else
-			debug("Server (socket=%d) connection accepted from %s.\n", connection, ip_addr);
-#endif
-
+			logp(INFO, "Server (socket=%d) connection accepted from %s.\n", connection, ip_addr);
 			// First thing is first: Get the repeater ID...
 			if( socket_read_exact(connection, host_id, MAX_HOST_NAME_LEN) < 0 ) {
 				if( ( errno == ECONNRESET )  || ( errno == ENOTCONN ) ) {
-#ifndef _DEBUG
-					debug("Connection closed by server.\n");
-#else
-					debug("Connection closed by server (socket=%d) while trying to read the host id.\n", connection);
-#endif
+					logp(INFO, "Connection closed by server (socket=%d) while trying to read the host id.\n", connection);
 				} else {
-#ifndef _DEBUG
-					debug("Reading host id from server return socket error %d.\n", errno);
-#else
-					debug("Reading host id from server (socket=%d) return socket error %d.\n", connection, errno);
-#endif
+					logp(DEBUG, "Reading host id from server (socket=%d) return socket error %d.\n", connection, errno);
 				}
 				socket_close( connection ); 
 				continue;
 			}
 
 			// Check and cypher the ID
-			memset((char *)&challenge, 0, CHALLENGESIZE);
+			memset(challenge, 0, CHALLENGESIZE);
 			if( ParseDisplay(host_id, phost, MAX_HOST_NAME_LEN, (int *)&code, (unsigned char *)&challenge) == FALSE ) {
-				debug("server_listen(): Reading Proxy settings error");
+				log(ERROR, "server_listen(): Reading Proxy settings error");
 				socket_close( connection ); 
 				continue;
 			}
-#ifdef _DEBUG
 			else {
-				debug("Server (socket=%d) sent the host ID:%d.\n", connection, code );
+				logp(DEBUG, "Server (socket=%d) sent the host ID:%d.\n", connection, code );
 			}
-#endif
 
 			// Continue with the handshake until ClientInit.
 			// Read the Protocol Version
 			if( socket_read_exact(connection, protocol_version, sz_rfbProtocolVersionMsg) < 0 ) {
 				if( ( errno == ECONNRESET )  || ( errno == ENOTCONN ) ) {
-#ifndef _DEBUG
-					debug("Connection closed by server.\n");
-#else
-					debug("Connection closed by server (socket=%d) while trying to read the protocol version.\n", connection);
-#endif
+					logp(INFO, "Connection closed by server (socket=%d) while trying to read the protocol version.\n", connection);
 				} else {
-#ifndef _DEBUG
-					debug("Reading protocol version from server return socket error %d.\n", errno);
-#else
-					debug("Reading protocol version from server (socket=%d) return socket error %d.\n", connection, errno);
-#endif
+					logp(DEBUG, "Reading protocol version from server (socket=%d) return socket error %d.\n", connection, errno);
 				}
 				socket_close( connection );
 				continue;
 			}
-#ifdef _DEBUG
 			else {
-				debug("Server (socket=%d) sent protocol version.\n", connection);
+				logp(DEBUG, "Server (socket=%d) sent protocol version.\n", connection);
 			}
-#endif
 			// ToDo: Make sure the version is OK!
 
 			// Tell the server we are using Protocol Version 3.3
 			sprintf(protocol_version, rfbProtocolVersionFormat, rfbProtocolMajorVersion, rfbProtocolMinorVersion);
 			if( socket_write_exact(connection, protocol_version, sz_rfbProtocolVersionMsg) < 0 ) {
 				if( ( errno == ECONNRESET  ) || ( errno == ENOTCONN ) ) {
-#ifndef _DEBUG
-					debug("Connection closed by server.\n");
-#else
-					debug("Connection closed by server (socket=%d) while trying to write protocol version.\n", connection);
-#endif
+					logp(INFO, "Connection closed by server (socket=%d) while trying to write protocol version.\n", connection);
 				} else {
-#ifndef _DEBUG
-					debug("Writting protocol version to server returned socket error %d.\n", errno);
-#else
-					debug("Writting protocol version to server (socket=%d) returned socket error %d.\n", connection, errno);
-#endif
+					logp(DEBUG, "Writting protocol version to server (socket=%d) returned socket error %d.\n", connection, errno);
 				}
 				socket_close(connection);
 				continue;
 			} 
-#ifdef _DEBUG
 			else {
-				debug("Protocol version sent to server (socket=%d).\n", connection);
+				logp(DEBUG, "Protocol version sent to server (socket=%d).\n", connection);
 			}
-#endif
 
 			// The server should send the authentication type it whises to use.
 			// ToDo: We could add a password this would restrict other servers from
@@ -486,34 +489,20 @@ server_listen(LPVOID lpParam)
 			//       is the only scheme allowed.
 			if( socket_read_exact(connection, (char *)&auth_type, sizeof(auth_type)) < 0 ) {
 				if( ( errno == ECONNRESET )  || ( errno == ENOTCONN ) ) {
-#ifndef _DEBUG
-					debug("Connection closed by server.\n");
-#else
-					debug("Connection closed by server (socket=%d) while trying to read the authentication scheme.\n", connection);
-#endif
+					logp(INFO, "Connection closed by server (socket=%d) while trying to read the authentication scheme.\n", connection);
 				} else {
-#ifndef _DEBUG
-					debug("Reading authentication scheme from server return socket error %d.\n", errno);
-#else
-					debug("Reading authentication scheme from server (socket=%d) return socket error %d.\n", connection, errno);
-#endif
+					logp(DEBUG, "Reading authentication scheme from server (socket=%d) return socket error %d.\n", connection, errno);
 				}
 				socket_close( connection );
 				continue;
 			}
-#ifdef _DEBUG
 			else {
-				debug("Server (socket=%d) sent authentication scheme.\n", connection);
+				logp(DEBUG, "Server (socket=%d) sent authentication scheme.\n", connection);
 			}
-#endif
 
 			auth_type = Swap32IfLE(auth_type);
 			if( auth_type != rfbNoAuth ) {
-#ifndef _DEBUG
-				debug("Invalid authentication scheme sent by server.\n");
-#else
-				debug("Invalid authentication scheme sent by server (socket=%d).\n", connection);
-#endif
+				logp(ERROR, "Invalid authentication scheme sent by server (socket=%d).\n", connection);
 				socket_close( connection );
 				continue;
 			}
@@ -543,16 +532,12 @@ server_listen(LPVOID lpParam)
 				// ToDo: repeater_thread should be stored inside the slot in order to access it
 				if( notstopped ) {
 					if( thread_create(&repeater_thread, NULL, do_repeater, (LPVOID)current) != 0 ) {
-						fatal("Unable to create the repeater thread.\n");
+						log(FATAL, "Unable to create the repeater thread.\n");
 						notstopped = 0;
 					}
 				}
 			} else {
-#ifndef _DEBUG
-				debug("Server waiting for viewer to connect...\n");
-#else
-				debug("Server (socket=%d) waiting for viewer to connect...\n", current->server);
-#endif
+				logp(DEBUG, "Server (socket=%d) waiting for viewer to connect...\n", current->server);
 			}
 		}
 	}
@@ -560,16 +545,12 @@ server_listen(LPVOID lpParam)
 	notstopped = FALSE;
 	shutdown( thread_params->sock, 2);
 	socket_close(thread_params->sock);
-#ifdef _DEBUG
-	debug("Server listening thread has exited.\n");
-#endif
+	log(INFO, "Server listening thread has exited.\n");
 	return 0;
 }
 
 
-
-THREAD_CALL
-viewer_listen(LPVOID lpParam)
+THREAD_CALL viewer_listen(LPVOID lpParam)
 {
 	listener_thread_params *thread_params;
 	SOCKET connection;
@@ -590,7 +571,7 @@ viewer_listen(LPVOID lpParam)
 	if ( thread_params->sock == INVALID_SOCKET ) {
 		notstopped = FALSE;
 	} else {
-		debug("Listening for incoming viewer connections on port %d.\n", thread_params->port);
+		logp(DEBUG, "Listening for incoming viewer connections on port %d.\n", thread_params->port);
 	}
 
 	// Main loop
@@ -599,193 +580,118 @@ viewer_listen(LPVOID lpParam)
 		connection = socket_accept(thread_params->sock, (struct sockaddr *)&client, &socklen);
 		if( connection == INVALID_SOCKET ) {
 			if( notstopped ) 
-				debug("viewer_listen(): accept() failed, errno=%d\n", errno);
+				logp(INFO, "viewer_listen(): accept() failed, errno=%d\n", errno);
 			else 
 				break;
 		} else {
 			/* IP Address for monitoring purposes */
 			ip_addr = inet_ntoa(client.sin_addr);
-#ifndef _DEBUG
-			debug("Viewer connection accepted from %s.\n", ip_addr);
-#else
-			debug("Viewer (socket=%d) connection accepted from %s.\n", connection, ip_addr);
-#endif
+			logp(INFO, "Viewer (socket=%d) connection accepted from %s.\n", connection, ip_addr);
 
 			// Act like a server until the authentication phase is over.
 			// Send the protocol version.
 			sprintf(protocol_version, rfbProtocolVersionFormat, rfbProtocolMajorVersion, rfbProtocolMinorVersion);
 			if( socket_write_exact(connection, protocol_version, sz_rfbProtocolVersionMsg) < 0 ) {
 				if( ( errno == ECONNRESET  ) || ( errno == ENOTCONN ) ) {
-#ifndef _DEBUG
-					debug("Connection closed by viewer.\n");
-#else
-					debug("Connection closed by viewer (socket=%d) while trying to write protocol version.\n", connection);
-#endif
+					logp(INFO, "Connection closed by viewer (socket=%d) while trying to write protocol version.\n", connection);
 				} else {
-#ifndef _DEBUG
-					debug("Writting protocol version to viewer returned socket error %d.\n", errno);
-#else
-					debug("Writting protocol version to viewer (socket=%d) returned socket error %d.\n", connection, errno);
-#endif
+					logp(DEBUG, "Writting protocol version to viewer (socket=%d) returned socket error %d.\n", connection, errno);
 				}
 				socket_close( connection );
 				continue;
 			}
-#ifdef _DEBUG
 			else {
-				debug("Protocol version sent to viewer (socket=%d).\n", connection);
+				logp(DEBUG, "Protocol version sent to viewer (socket=%d).\n", connection);
 			}
-#endif
-
 
 			// Read the protocol version the client suggests (Must be 3.3)
 			if( socket_read_exact(connection, protocol_version, sz_rfbProtocolVersionMsg) < 0 ) {
 				if( ( errno == ECONNRESET  ) || ( errno == ENOTCONN ) ) {
-#ifndef _DEBUG
-					debug("Connection closed by viewer.\n");
-#else
-					debug("Connection closed by viewer (socket=%d) while trying to read protocol version.\n", connection);
-#endif
+					logp(INFO, "Connection closed by viewer (socket=%d) while trying to read protocol version.\n", connection);
 				} else {
-#ifndef _DEBUG
-					debug("Reading protocol version from viewer returned socket error %d.\n", errno);
-#else
-					debug("Reading protocol version from viewer (socket=%d) returned socket error %d.\n", connection, errno);
-#endif
+					logp(DEBUG, "Reading protocol version from viewer (socket=%d) returned socket error %d.\n", connection, errno);
 				}
 				socket_close( connection );
 				continue;
 			}
-#ifdef _DEBUG
 			else {
-				debug("Viewer (socket=%d) sent protocol version.\n", connection);
+				logp(DEBUG, "Viewer (socket=%d) sent protocol version.\n", connection);
 			}
-#endif
 
 			// Send Authentication Type (VNC Authentication to keep it standard)
 			auth_type = Swap32IfLE(rfbVncAuth);
 			if( socket_write_exact(connection, (char *)&auth_type, sizeof(auth_type)) < 0 ) {
 				if( ( errno == ECONNRESET  ) || ( errno == ENOTCONN ) ) {
-#ifndef _DEBUG
-					debug("Connection closed by viewer.\n");
-#else
-					debug("Connection closed by viewer (socket=%d) while trying to write authentication scheme.\n", connection);
-#endif
+					logp(INFO, "Connection closed by viewer (socket=%d) while trying to write authentication scheme.\n", connection);
 				} else {
-#ifndef _DEBUG
-					debug("Writting authentication scheme to viewer returned socket error %d.\n", errno);
-#else
-					debug("Writting authentication scheme to viewer (socket=%d) returned socket error %d.\n", connection, errno);
-#endif
+					logp(DEBUG, "Writting authentication scheme to viewer (socket=%d) returned socket error %d.\n", connection, errno);
 				}
 				socket_close( connection );
 				continue;
 			}
-#ifdef _DEBUG
 			else {
-				debug("Authentication scheme sent to viewer (socket=%d).\n", connection);
+				logp(DEBUG, "Authentication scheme sent to viewer (socket=%d).\n", connection);
 			}
-#endif
 
 			// We must send the 16 bytes challenge key.
 			// In order for this to work the challenge must be always the same.
-			if( socket_write_exact(connection, (char *)&challenge_key, CHALLENGESIZE) < 0 ) {
+			if( socket_write_exact(connection, (char *)challenge_key, CHALLENGESIZE) < 0 ) {
 				if( ( errno == ECONNRESET  ) || ( errno == ENOTCONN ) ) {
-#ifndef _DEBUG
-					debug("Connection closed by viewer.\n");
-#else
-					debug("Connection closed by viewer (socket=%d) while trying to write challenge key.\n", connection);
-#endif
+					logp(INFO, "Connection closed by viewer (socket=%d) while trying to write challenge key.\n", connection);
 				} else {
-#ifndef _DEBUG
-					debug("Writting challenge key to viewer returned socket error %d.\n", errno);
-#else
-					debug("Writting challenge key to viewer (socket=%d) returned socket error %d.\n", connection, errno);
-#endif
+					logp(DEBUG, "Writting challenge key to viewer (socket=%d) returned socket error %d.\n", connection, errno);
 				}
 				socket_close( connection );
 				continue;
 			}
-#ifdef _DEBUG
 			else {
-				debug("Challenge sent to viewer (socket=%d).\n", connection );
+				logp(DEBUG, "Challenge sent to viewer (socket=%d).\n", connection );
 			}
-#endif
 
 			// Read the password.
 			// It will be treated as the repeater IDentifier.
-			memset(&challenge, 0, CHALLENGESIZE);
-			if( socket_read_exact(connection, (char *)&challenge, CHALLENGESIZE) < 0 ) {
+			memset(challenge, 0, CHALLENGESIZE);
+			if( socket_read_exact(connection, (char *)challenge, CHALLENGESIZE) < 0 ) {
 				if( ( errno == ECONNRESET )  || ( errno == ENOTCONN ) ) {
-#ifndef _DEBUG
-					debug("Connection closed by viewer.\n");
-#else
-					debug("Connection closed by viewer (socket=%d) while trying to read challenge response.\n", connection);
-#endif
+					logp(INFO, "Connection closed by viewer (socket=%d) while trying to read challenge response.\n", connection);
 				} else {
-#ifndef _DEBUG
-					debug("Reading challenge response from viewer return socket error %d.\n", errno);
-#else
-					debug("Reading challenge response from viewer (socket=%d) return socket error %d.\n", connection, errno);
-#endif
+					logp(DEBUG, "Reading challenge response from viewer (socket=%d) return socket error %d.\n", connection, errno);
 				}
 				socket_close( connection );
 				continue;
 			}
-#ifdef _DEBUG
 			else {
-				debug("Viewer (socket=%d) sent challenge response.\n", connection);
+				logp(DEBUG, "Viewer (socket=%d) sent challenge response.\n", connection);
 			}
-#endif
 
 			// Send Authentication response
 			auth_response = Swap32IfLE(rfbVncAuthOK);
 			if( socket_write_exact(connection, (char *)&auth_response, sizeof(auth_response)) < 0 ) {
 				if( ( errno == ECONNRESET  ) || ( errno == ENOTCONN ) ) {
-#ifndef _DEBUG
-					debug("Connection closed by viewer.\n");
-#else
-					debug("Connection closed by viewer (socket=%d) while trying to write authentication response.\n", connection);
-#endif
+					logp(INFO, "Connection closed by viewer (socket=%d) while trying to write authentication response.\n", connection);
 				} else {
-#ifndef _DEBUG
-					debug("Writting authentication response to viewer returned socket error %d.\n", errno);
-#else
-					debug("Writting authentication response to viewer (socket=%d) returned socket error %d.\n", connection, errno);
-#endif
+					logp(DEBUG, "Writting authentication response to viewer (socket=%d) returned socket error %d.\n", connection, errno);
 				}
 				socket_close( connection );
 				continue;
 			}
-#ifdef _DEBUG
 			else {
-				debug("Authentication response sent to viewer (socket=%d).\n", connection);
+				logp(DEBUG, "Authentication response sent to viewer (socket=%d).\n", connection);
 			}
-#endif
 
 			// Retrieve ClientInit and save it inside the structure.
 			if( socket_read_exact(connection, (char *)&client_init, sizeof(client_init)) < 0 ) {
 				if( ( errno == ECONNRESET )  || ( errno == ENOTCONN ) ) {
-#ifndef _DEBUG
-					debug("Connection closed by viewer.\n");
-#else
-					debug("Connection closed by viewer (socket=%d) while trying to read ClientInit.\n", connection);
-#endif
+					logp(DEBUG, "Connection closed by viewer (socket=%d) while trying to read ClientInit.\n", connection);
 				} else {
-#ifndef _DEBUG
-					debug("Reading ClientInit from viewer return socket error %d.\n", errno);
-#else
-					debug("Reading ClientInit from viewer (socket=%d) return socket error %d.\n", connection, errno);
-#endif
+					logp(DEBUG, "Reading ClientInit from viewer (socket=%d) return socket error %d.\n", connection, errno);
 				}
 				socket_close( connection );
 				continue;
 			} 
-#ifdef _DEBUG
 			else {
-				debug("Viewer (socket=%d) sent ClientInit message.\n", connection);
+				logp(DEBUG, "Viewer (socket=%d) sent ClientInit message.\n", connection);
 			}
-#endif
 
 			// Screws LINUX!
 			//shutdown(thread_params->sock, 2);
@@ -810,16 +716,12 @@ viewer_listen(LPVOID lpParam)
 				// ToDo: repeater_thread should be stored inside the slot in order to access it
 				if( notstopped ) {
 					if( thread_create(&repeater_thread, NULL, do_repeater, (LPVOID)current) != 0 ) {
-						fatal("Unable to create the repeater thread.\n");
+						log(FATAL, "Unable to create the repeater thread.\n");
 						notstopped = 0;
 					}
 				}
 			} else {
-#ifndef _DEBUG
-				debug("Viewer waiting for server to connect...\n");
-#else
-				debug("Viewer (socket=%d) waiting for server to connect...\n", current->viewer);
-#endif
+				logp(DEBUG, "Viewer (socket=%d) waiting for server to connect...\n", current->viewer);
 			}
 		}
 	}
@@ -827,23 +729,16 @@ viewer_listen(LPVOID lpParam)
 	notstopped = FALSE;
 	shutdown( thread_params->sock, 2);
 	socket_close( thread_params->sock );
-#ifdef _DEBUG
-	debug("Viewer listening thread has exited.\n");
-#endif
+	log(INFO, "Viewer listening thread has exited.\n");
 	return 0;
 }
 
 
-
-void 
-ExitRepeater(int sig)
+void ExitRepeater(int sig)
 {
-#ifdef _DEBUG
-	debug("Exit signal trapped.\n");
-#endif
+	log(DEBUG, "Exit signal trapped.\n");
 	notstopped = FALSE;
 }
-
 
 
 void usage(char * appname)
@@ -852,8 +747,8 @@ void usage(char * appname)
 	fprintf(stderr, "  -server port  Defines the listening port for incoming VNC Server connections.\n");
 	fprintf(stderr, "  -viewer port  Defines the listening port for incoming VNC viewer connections.\n");
 	fprintf(stderr, "  -dump file  Defines the file to dump the json representation of current connections.\n");
+	fprintf(stderr, "  -loglevel level Defines the logger level - ERROR, FATAL, INFO, DEBUG.\n");
 	fprintf(stderr, "\nFor more information please visit http://code.google.com/p/vncrepeater\n\n");
-
 	exit(1);
 }
 
@@ -931,7 +826,18 @@ int main(int argc, char **argv)
 
 				dump_file = argv[(i+1)];
         i++; 
-      } else {
+			} else if ( _stricmp( argv[i], "-loglevel" ) == 0 ) {
+        if( (i+i) == argc ) {
+					usage( argv[0] );
+					return 1;
+				}
+
+				char level = ::get_log_level(argv[(i+1)]);
+        if(level == -1) { usage( argv[0] ); return 1; }
+        ::log_level = level;
+        i++; 
+      } 
+      else {
 				usage( argv[0] );
 				return 1;
 			}
@@ -945,9 +851,9 @@ int main(int argc, char **argv)
 #endif
 
 	/* Start */
-	printf("\nVNC Repeater [Version %s]\n", VNCREPEATER_VERSION);
-	printf("Copyright (C) 2010 Juan Pedro Gonzalez Gutierrez. Licensed under GPL v2.\n");
-	printf("Get the latest version at http://code.google.com/p/vncrepeater/\n\n");
+	logp(ERROR, "VNC Repeater [Version %s]\n", VNCREPEATER_VERSION);
+	log(INFO, "Copyright (C) 2010 Juan Pedro Gonzalez Gutierrez. Licensed under GPL v2.\n");
+	log(INFO, "Get the latest version at http://code.google.com/p/vncrepeater/\n\n");
 
 	/* Initialize some variables */
 	notstopped = TRUE;
@@ -969,29 +875,31 @@ int main(int argc, char **argv)
 	// Initialize MutEx
 	t_result = mutex_init( &mutex_slots );
 	if( t_result != 0 ) {
-#ifndef _DEBUG
-		error("Failed to create mutex with error: %d\n", t_result );
-#else
-		error("Failed to create mutex for repeater slots with error: %d\n", t_result );
-#endif
+		logp(ERROR, "Failed to create mutex for repeater slots with error: %d\n", t_result );
 		notstopped = 0;
 	}
 
 	// Tying new threads ;)
 	if( notstopped ) {
 		if( thread_create(&hServerThread, NULL, server_listen, (LPVOID)server_thread_params) != 0 ) {
-			fatal("Unable to create the thread to listen for servers.\n");
+			log(FATAL, "Unable to create the thread to listen for servers.\n");
 			notstopped = 0;
 		}
 	}
 
 	if( notstopped ) {
 		if( thread_create(&hViewerThread, NULL, viewer_listen, (LPVOID)viewer_thread_params) != 0 ) {
-			fatal("Unable to create the thread to listen for viewers.\n");
+			log(FATAL, "Unable to create the thread to listen for viewers.\n");
 			notstopped = 0;
 		}
 	}
-
+  if( notstopped )
+  {
+    FILE *f = fopen( "pid.repeater", "w" );
+    if(!f) perror("pid.repeater"), exit(1);
+    fprintf(f, "%d\n", (int)getpid());
+    fclose(f);
+  } 
 	// Main loop
 	while( notstopped ) 
 	{ 
@@ -999,11 +907,10 @@ int main(int argc, char **argv)
 		CleanupSlots();
     if (dump_file != NULL) {
       int dump_fd = open (dump_file, O_CREAT | O_TRUNC | O_WRONLY, 0644);
-      char * json = DumpSlots();
-      if (json != NULL) 
-        write (dump_fd, json, strlen(json) );	
+      std::string json = DumpSlots();
+      if (!json.empty()) 
+        write (dump_fd, json.c_str(), json.length() );	
       close (dump_fd);
-      delete[] json;
     }
 
 		/* Take a "nap" so CPU usage doesn't go up. */
@@ -1014,7 +921,7 @@ int main(int argc, char **argv)
 #endif
 	}
 
-	printf("\nExiting VNC Repeater...\n");
+  log(ERROR, "\nExiting VNC Repeater...\n");
 
 	notstopped = FALSE;
 
@@ -1031,20 +938,16 @@ int main(int argc, char **argv)
 
 	/* Make sure the threads have finalized */
 	if( thread_cleanup( hServerThread, 30) != 0 ) {
-		error("The server listener thread doesn't seem to exit cleanlly.\n");
+		log(ERROR, "The server listener thread doesn't seem to exit cleanlly.\n");
 	}
 	if( thread_cleanup( hViewerThread, 30) != 0 ) {
-		error("The viewer listener thread doesn't seem to exit cleanlly.\n");
+		log(ERROR, "The viewer listener thread doesn't seem to exit cleanlly.\n");
 	}
 
 	// Destroy mutex
   t_result = mutex_destroy( &mutex_slots );
 	if( t_result != 0 ) {
-#ifndef _DEBUG
-		 error("Failed to destroy mutex with error: %d\n", t_result);
-#else
-		 error("Failed to destroy mutex for repeater slots with error: %d\n", t_result);
-#endif
+		 logp(ERROR, "Failed to destroy mutex for repeater slots with error: %d\n", t_result);
 	 }
 
 #ifdef WIN32
@@ -1054,3 +957,4 @@ int main(int argc, char **argv)
 
 	 return 0;
 }
+

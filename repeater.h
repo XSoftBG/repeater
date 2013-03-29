@@ -19,9 +19,16 @@
 //
 /////////////////////////////////////////////////////////////////////////////
 
-void debug(const char *fmt, ...);
-void error( const char *fmt, ...);
-void fatal(const char *fmt, ...);
-void report_bytes(char *prefix, char *buf, int len);
+#define ERROR '\0'
+#define FATAL '\1'
+#define INFO  '\2'
+#define DEBUG '\3'
+
+int logger(char level, const char *fmt, ...);
 
 extern int notstopped;
+extern int log_level;
+
+#define logp(l,fmt,...) ( (::log_level>=(l)) ? logger(l, fmt, __VA_ARGS__) : 0 )
+#define log(l,s) ( (::log_level>=(l)) ? logger(l, "%s", s) : 0 )
+

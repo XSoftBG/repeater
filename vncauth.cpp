@@ -52,19 +52,18 @@ unsigned char fixedkey[8] = {23,82,107,6,35,78,88,7};
 /*
  *   Encrypt a password and store it in a file.
  */
-int
-vncEncryptPasswd(char *passwd, unsigned char *encryptedPasswd)
+int vncEncryptPasswd(char *passwd, unsigned char *encryptedPasswd)
 {
     size_t i;
 
     /* pad password with nulls */
 
     for (i = 0; i < MAXPWLEN; i++) {
-	if (i < strlen(passwd)) {
-	    encryptedPasswd[i] = passwd[i];
-	} else {
-	    encryptedPasswd[i] = 0;
-	}
+	    if (i < strlen(passwd)) {
+	        encryptedPasswd[i] = passwd[i];
+	    } else {
+	        encryptedPasswd[i] = 0;
+	    }
     }
 
     /* Do encryption in-place - this way we overwrite our copy of the plaintext
@@ -81,8 +80,7 @@ vncEncryptPasswd(char *passwd, unsigned char *encryptedPasswd)
  *   string containing the password or a null pointer if the password could
  *   not be retrieved for some reason.
  */
-char *
-vncDecryptPasswd(unsigned char *inouttext)
+char * vncDecryptPasswd(unsigned char *inouttext)
 {
     unsigned char *passwd = (unsigned char *)malloc(9);
 
@@ -98,8 +96,8 @@ vncDecryptPasswd(unsigned char *inouttext)
 /*
  *   Generate a set of random bytes for use in challenge-response authentication.
  */
-void
-vncRandomBytes(unsigned char *where) {
+void vncRandomBytes(unsigned char *where) 
+{
   int i;
   static unsigned int seed;
 #ifdef WIN32
@@ -117,8 +115,7 @@ vncRandomBytes(unsigned char *where) {
 /*
  *   Encrypt some bytes in memory using a password.
  */
-void
-vncEncryptBytes(unsigned char *where, const char *passwd)
+void vncEncryptBytes(unsigned char *where, const char *passwd)
 {
     unsigned char key[8];
     size_t i;
@@ -126,16 +123,17 @@ vncEncryptBytes(unsigned char *where, const char *passwd)
     /* key is simply password padded with nulls */
 
     for (i = 0; i < 8; i++) {
-	if (i < strlen(passwd)) {
-	    key[i] = passwd[i];
-	} else {
-	    key[i] = 0;
-	}
+	    if (i < strlen(passwd)) {
+	        key[i] = passwd[i];
+	    } else {
+	        key[i] = 0;
+	    }
     }
 
     deskey(key, EN0);
 
     for (i = 0; i < CHALLENGESIZE; i += 8) {
-	des(where+i, where+i);
+	    des(where+i, where+i);
     }
 }
+
