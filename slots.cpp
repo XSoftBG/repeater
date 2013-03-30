@@ -25,6 +25,7 @@
 #ifndef WIN32
 #include <string.h>
 #endif
+#include "logger.h"
 #include "sockets.h" /* SOCKET */
 #include "rfb.h"     /* CARD8 */
 #include "vncauth.h" /* CHALLENGESIZE */

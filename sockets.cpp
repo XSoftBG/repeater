@@ -27,8 +27,8 @@
 #include <errno.h>
 #endif
 
+#include "logger.h"
 #include "sockets.h"
-#include "repeater.h"
 
 #ifdef WIN32
 int errno;
@@ -59,12 +59,10 @@ int WinsockInitialize( void )
 		WSACleanup();
 		return 0;
 	}
-
 	return 1;
 }
 
-void
-WinsockFinalize( void )
+void WinsockFinalize( void )
 {
 	WSACleanup();
 }
@@ -130,18 +128,16 @@ SOCKET CreateListenerSocket(u_short port)
 
 int  socket_read(SOCKET s, char * buff, socklen_t bufflen)
 {
-	int bytes;
-
+	int bytes = recv( s, buff, bufflen, 0);
 	errno = 0;
-	if( ( bytes = recv( s, buff, bufflen, 0) ) < 0 ) {
+	if(bytes < 0) {
 #ifdef WIN32
 		errno = WSAGetLastError();
 #endif
 		return -1;
-	} else if( bytes == 0 ) {
+	} else if(bytes == 0) {
 		errno = ENOTCONN;
 	}
-
 	return bytes;
 }
 
@@ -287,8 +283,7 @@ SOCKET  socket_accept(SOCKET s, struct sockaddr * addr, socklen_t * addrlen)
 int socket_close(SOCKET s)
 {
 	errno = 0;
-
-	shutdown( s, 2);
+	shutdown(s, 2);
 #ifdef WIN32
 	if( closesocket( s ) != 0 ) {
 		errno = WSAGetLastError();
@@ -297,7 +292,6 @@ int socket_close(SOCKET s)
 #endif
 		return -1;
 	}
-
 	return 0;
 }
 

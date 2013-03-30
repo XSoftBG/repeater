@@ -4,7 +4,7 @@ CCFLAGS = -Wall
 LDFLAGS = -lpthread -lrt
 PROGNAME = repeater
 
-MODULES = repeater.o config.o slots.o mutex.o thread.o sockets.o vncauth.o d3des.o
+MODULES = repeater.o config.o slots.o mutex.o thread.o sockets.o vncauth.o d3des.o logger.o
 
 all: release
 

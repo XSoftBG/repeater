@@ -21,7 +21,7 @@
 
 #include <time.h>
 #include "thread.h"
-#include "repeater.h" /* Logging */
+#include "logger.h"
 #ifndef WIN32
 #include <errno.h>
 #endif
@@ -111,7 +111,6 @@ int thread_cleanup(thread_t thread, unsigned int seconds)
 	return rc;
 }
 
-
 int thread_terminate(thread_t thread)
 {
 	int rc;
@@ -126,3 +125,4 @@ int thread_terminate(thread_t thread)
 
 	return rc;
 }
+

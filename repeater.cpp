@@ -38,13 +38,10 @@
 #include <pthread.h>
 #include <netinet/tcp.h>	/* u_short */
 #include <unistd.h>
-#include <sys/time.h>
-#else
-#include <time.h>
 #endif
-#include <sys/timeb.h>
 #include <string>
 
+#include "logger.h"
 #include "thread.h"
 #include "sockets.h"
 #include "rfb.h"
@@ -74,8 +71,6 @@ typedef struct _listener_thread_params {
 
 // Global variables
 int notstopped;
-int log_level = INFO;
-
 
 // Prototypes
 int ParseDisplay(char *display, char *phost, int hostlen, char *pport);
@@ -86,95 +81,7 @@ THREAD_CALL server_listen(LPVOID lpParam);
 THREAD_CALL viewer_listen(LPVOID lpParam);
 #ifdef WIN32
 void ThreadCleanup(HANDLE hThread, DWORD dwMilliseconds);
-//DWORD WINAPI do_repeater(LPVOID lpParam);
 #endif
-
-
-/*****************************************************************************
- *
- * Output methods
- *
- *****************************************************************************/
-
-int64_t millitime()
-{
-  struct timeb t;
-  ::ftime( &t );
-  return t.time * 1000LL + t.millitm;
-}
-
-int64_t microtime()
-{
-#ifdef WIN32
-  return ::millitime() * 1000LL;
-#else
-  struct timeval tv;
-  return ::gettimeofday( &tv, NULL ) ? 0LL : tv.tv_sec * 1000000LL + tv.tv_usec;
-#endif
-}
-
-const char *microtime_str(int64_t t)
-{
-  static char buf[40];
-  time_t time = int(t / 1000000LL);
-  int64_t milltime = t % 1000000LL;
-
-  size_t n = ::strftime( buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", ::localtime( &time ) );
-  sprintf( buf+n, ".%06d", (int)milltime );
-  return buf;
-}
-
-const char * get_log_level_name(char level)
-{
-  switch(level)
-  {
-    case ERROR: return "ERROR";
-    case FATAL: return "FATAL";
-    case INFO:  return "INFO";
-    case DEBUG: return "DEBUG";
-    default:    return "???";
-  }
-}
-
-char get_log_level(std::string level_name)
-{
-  if( level_name == "ERROR") return ERROR;
-  else
-  if( level_name == "FATAL") return FATAL;
-  else
-  if( level_name == "INFO")  return INFO;
-  else
-  if( level_name == "DEBUG") return DEBUG;
-  else return -1;
-}
-
-int logger(char level, const char *fmt, ...)
-{
-  static char buffer[32*1024]; // max 8k message
-
-  if( ::log_level >= level )
-  { 
-    va_list args;
-    va_start(args, fmt);
-    const char *ts = ::microtime_str( ::microtime() );
-    const char * str_level = get_log_level_name(level);
-    size_t sz = snprintf( buffer, sizeof(buffer)-40, "[%s][%s] ", ts, str_level);
-    int n = vsnprintf( buffer+sz, sizeof(buffer)-40-sz, fmt, args);
-    if( n > 0 )
-      sz += n;
-    if( n < 0 || sz >= sizeof(buffer)-40 )
-    {
-      sz = sizeof(buffer)-40;
-      const char *msg = "... \n**** MESSAGE TRUNCATED ****\n";
-      strcpy( buffer+sz, msg );
-      sz += strlen(msg);
-    }
-    va_end(args);
-    fprintf(stderr, "%s", buffer);
-    return 1;
-  }
-  return 0;
-}
 
 
 /*****************************************************************************
@@ -507,9 +414,6 @@ THREAD_CALL server_listen(LPVOID lpParam)
 				continue;
 			}
 
-			// Screws LINUX!
-			// shutdown(thread_params->sock, 2);
-
 			// Prepare the reapeaterinfo structure for the viewer
 			/* Initialize the slot */
 			slot = (repeaterslot *)malloc( sizeof(repeaterslot) );
@@ -693,9 +597,6 @@ THREAD_CALL viewer_listen(LPVOID lpParam)
 				logp(DEBUG, "Viewer (socket=%d) sent ClientInit message.\n", connection);
 			}
 
-			// Screws LINUX!
-			//shutdown(thread_params->sock, 2);
-
 			// Prepare the reapeaterinfo structure for the viewer
 			slot = (repeaterslot *)malloc( sizeof(repeaterslot) );
 			memset(slot, 0, sizeof(repeaterslot));
@@ -834,7 +735,7 @@ int main(int argc, char **argv)
 
 				char level = ::get_log_level(argv[(i+1)]);
         if(level == -1) { usage( argv[0] ); return 1; }
-        ::log_level = level;
+        ::logger_level = level;
         i++; 
       } 
       else {
@@ -869,7 +770,6 @@ int main(int argc, char **argv)
 
 	server_thread_params->port = server_port;
 	viewer_thread_params->port = viewer_port;
-
 
 	// Start multithreading...
 	// Initialize MutEx
