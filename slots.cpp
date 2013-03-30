@@ -26,6 +26,7 @@
 #include <string.h>
 #endif
 #include "logger.h"
+
 #include "sockets.h" /* SOCKET */
 #include "rfb.h"     /* CARD8 */
 #include "vncauth.h" /* CHALLENGESIZE */
@@ -109,6 +110,7 @@ repeaterslot * NewSlot( void )
 	repeaterslot * new_slot = ((repeaterslot *)malloc( sizeof( repeaterslot ) ) );
 	if( new_slot == NULL )
 		log(ERROR, "Not enough memory to allocate a new slot.\n");
+  memset(new_slot, 0, sizeof(repeaterslot));
 	return new_slot;
 }
 

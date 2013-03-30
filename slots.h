@@ -49,11 +49,12 @@ extern mutex_t mutex_slots;
 void InitializeSlots( unsigned int max );
 void FreeSlots( void );
 
+repeaterslot * NewSlot( void );
 repeaterslot * AddSlot(repeaterslot *slot);
+void FreeSlot(repeaterslot *slot);
 void CleanupSlots( void );
 void ListSlots( void );
 std::string DumpSlots( void );
-void  FreeSlot(repeaterslot *slot);
 repeaterslot * AddServer(SOCKET s, char * code);
 repeaterslot * AddViewer(SOCKET s, unsigned char * challenge);
 repeaterslot * FindSlotByChallenge(unsigned char * challenge);

@@ -96,7 +96,6 @@ void WinsockFinalize( void );
 SOCKET CreateListenerSocket(u_short port);
 SOCKET socket_accept(SOCKET s, struct sockaddr * addr, socklen_t * addrlen);
 int socket_close(SOCKET s);
-int socket_read(SOCKET s, char * buff, socklen_t bufflen);
 int socket_read_exact(SOCKET s,  char * buff, socklen_t bufflen);
 int socket_write_exact(SOCKET s, char * buff, socklen_t bufflen);
 
