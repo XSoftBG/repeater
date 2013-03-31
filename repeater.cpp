@@ -83,7 +83,6 @@ bool ParseDisplay(char *display, char *phost, int hostlen, int *pport, unsigned 
 	return true;
 }
 
-
 THREAD_CALL do_repeater(LPVOID lpParam)
 {
 	char viewerbuf[IO_BUFFER_SIZE];  /* viewer input buffer */
@@ -110,24 +109,24 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 			  FD_SET(slot->viewer, &ifds); /** prepare for reading viewer input **/ 
 			  FD_SET(slot->server, &ifds); /** prepare for reading server input **/
 
-			  if( select(nfds, &ifds, NULL, NULL, NULL) == -1 ) {
+			  if( select(nfds, &ifds, NULL, NULL, NULL) < 0 ) {
 				  logp(ERROR, "do_repeater(): input select() failed, errno=%d", errno);
           break;
 			  } 		
 
 			  /* server => viewer */ 
 			  if (FD_ISSET(slot->server, &ifds)) { 
-				  len = socket_read(slot->server, serverbuf, sizeof(serverbuf)); 
+				  len = ::socket_read(slot->server, serverbuf, sizeof(serverbuf)); 
 				  if (len > 0) {
 					  serverbuf_len += len; /* repeat */
-				  } else {
+				  } else if(len < 0) {
 					  break;
 				  }
 			  }
 
 			  /* viewer => server */ 
 			  if( FD_ISSET(slot->viewer, &ifds) ) {
-				  len = socket_read(slot->viewer, viewerbuf, sizeof(viewerbuf));
+				  len = ::socket_read(slot->viewer, viewerbuf, sizeof(viewerbuf));
 				  if (len > 0) {
 					  viewerbuf_len += len;  /* repeat */
 				  } else if(len < 0) {
@@ -141,14 +140,14 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 			  FD_SET(slot->viewer, &ofds); /** prepare for reading viewer output **/ 
 			  FD_SET(slot->server, &ofds); /** prepare for reading server output **/
 
-		    if( select(nfds, NULL, &ofds, NULL, NULL) == -1 ) {
+		    if( ::select(nfds, NULL, &ofds, NULL, NULL) < 0 ) {
 			    logp(ERROR, "do_repeater(): ouput select() failed, errno=%d", errno);
           break;
 		    } 		
 
 		    /* flush data in viewerbuffer to server */ 
 		    if( FD_ISSET(slot->server, &ofds) && viewerbuf_len > 0 ) { 
-			    len = socket_write(slot->server, viewerbuf+(sizeof(viewerbuf)-viewerbuf_len), viewerbuf_len); 
+			    len = ::socket_write(slot->server, viewerbuf+(sizeof(viewerbuf)-viewerbuf_len), viewerbuf_len); 
 			    if(len > 0) {
 				    viewerbuf_len -= len;
 			    } else if(len < 0) {
@@ -158,7 +157,7 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 
 		    /* flush data in serverbuffer to viewer */
 		    if( FD_ISSET(slot->viewer, &ofds) && serverbuf_len > 0 ) { 
-			    len = socket_write(slot->viewer, serverbuf+(sizeof(serverbuf)-serverbuf_len), serverbuf_len);
+			    len = ::socket_write(slot->viewer, serverbuf+(sizeof(serverbuf)-serverbuf_len), serverbuf_len);
 			    if(len > 0) {
 				    serverbuf_len -= len;
 			    } else if(len < 0) {
@@ -204,6 +203,7 @@ void add_new_slot(SOCKET server_socket, SOCKET viewer_socket, unsigned char *cha
          server_socket == INVALID_SOCKET ? "server" : "viewer");
   }
 }
+
 
 bool socket_recv(SOCKET s, char * buff, socklen_t bufflen, const char *msg)
 {
