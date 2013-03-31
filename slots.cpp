@@ -37,8 +37,6 @@
 #include <iostream>
 #include <sstream>
 
-
-
 repeaterslot * Slots;
 unsigned int slotCount;
 unsigned int max_slots;
@@ -87,18 +85,18 @@ int ParseID(char * code)
 
 	for( i=0; i<strlen( code ); i++ ) {
 		if( !isdigit( code[i] ) ) {
-			log(ERROR, "The repeater ID must be numeric.\n");
+			log(ERROR, "The repeater ID must be numeric.");
 			return 0;
 		}
 	}
 
 	retVal = strtol(code, NULL, 10);
 	if( retVal <= 0 ) {
-		log(ERROR, "The repeater ID should be a positive integer.\n");
+		log(ERROR, "The repeater ID should be a positive integer.");
 		return 0;
 	} else if( retVal > 99999999 ) {
 		/* VNC password only allows for 8 characters, so 99999999 is the biggest number */
-		log(ERROR, "The repeater ID is too big.\n");
+		log(ERROR, "The repeater ID is too big.");
 		return 0;
 	}
 
@@ -109,7 +107,7 @@ repeaterslot * NewSlot( void )
 {
 	repeaterslot * new_slot = ((repeaterslot *)malloc( sizeof( repeaterslot ) ) );
 	if( new_slot == NULL )
-		log(ERROR, "Not enough memory to allocate a new slot.\n");
+		log(ERROR, "Not enough memory to allocate a new slot.");
   memset(new_slot, 0, sizeof(repeaterslot));
 	return new_slot;
 }
@@ -139,10 +137,10 @@ void FreeSlots( void )
 		if( current->server != INVALID_SOCKET ) {
 			shutdown( current->server, 2);
 			if( socket_close( current->server ) == -1 ) {
-				logp(ERROR, "Server socket failed to close. Socket error = %d.\n", errno);
+				logp(ERROR, "Server socket failed to close. Socket error = %d.", errno);
 			}
 			else {
-				log(DEBUG, "Server socket has been closed.\n");
+				log(DEBUG, "Server socket has been closed.");
 			}
 		}
 
@@ -150,10 +148,10 @@ void FreeSlots( void )
 		if( current->viewer != INVALID_SOCKET ) {
 			shutdown( current->viewer, 2);
 			if( socket_close( current->viewer ) == -1 ) {
-				logp(ERROR, "Viewer socket failed to close. Socket error = %d.\n", errno);
+				logp(ERROR, "Viewer socket failed to close. Socket error = %d.", errno);
 			}
 			else {
-				log(DEBUG, "Viewer socket has been closed.\n");
+				log(DEBUG, "Viewer socket has been closed.");
 			}
 		}
 
@@ -166,7 +164,7 @@ void FreeSlots( void )
 
 	/* Check */
 	if( slotCount != 0 ) {
-		log(FATAL, "Failed to free repeater slots.\n");
+		log(FATAL, "Failed to free repeater slots.");
 		slotCount = 0;
 	}
 
@@ -181,16 +179,16 @@ repeaterslot * AddSlot(repeaterslot *slot)
 	if( LockSlots("AddSlot()") != 0 )
 		return NULL;
 
-	if( ( slot->server == INVALID_SOCKET ) && ( slot->viewer == INVALID_SOCKET ) ) {
-		log(ERROR, "Trying to allocate an empty slot.\n");
+	if(slot->server == INVALID_SOCKET && slot->viewer == INVALID_SOCKET) {
+		log(ERROR, "Trying to allocate an empty slot.");
 		UnlockSlots("AddSlot()");
 		return NULL;
 	} else if( slot->next != NULL ) {
-		log(ERROR, "Memory allocation problem detected while trying to add a slot.\n");
+		log(ERROR, "Memory allocation problem detected while trying to add a slot.");
 		UnlockSlots("AddSlot()");
 		return NULL;
 	} else if( ( max_slots > 0 ) && (max_slots == slotCount) ) {
-		log(ERROR, "All the slots are in use.\n");
+		log(ERROR, "All the slots are in use.");
 		UnlockSlots("AddSlot()");
 		return NULL;
 	}
@@ -204,7 +202,7 @@ repeaterslot * AddSlot(repeaterslot *slot)
 			slotCount++;
 		}
 		UnlockSlots("AddSlot()");
-		logp(DEBUG, "Allocated repeater slots: %d.\n", slotCount);
+		logp(DEBUG, "Allocated repeater slots: %d.", slotCount);
 		return Slots;
 	} else {
 		current = FindSlotByChallenge( slot->challenge );
@@ -214,7 +212,7 @@ repeaterslot * AddSlot(repeaterslot *slot)
 			Slots = slot;
 			slotCount++;
 			UnlockSlots("AddSlot()");
-			logp(DEBUG, "Allocated repeater slots: %d.\n", slotCount);
+			logp(DEBUG, "Allocated repeater slots: %d.", slotCount);
 			return Slots;
 		} else if( current->server == INVALID_SOCKET ) {
 			current->server = slot->server;
@@ -223,18 +221,18 @@ repeaterslot * AddSlot(repeaterslot *slot)
 			current->viewer = slot->viewer;
 		} else {
 			UnlockSlots("AddSlot()");
-			logp(DEBUG, "Allocated repeater slots: %d.\n", slotCount);
+			logp(DEBUG, "Allocated repeater slots: %d.", slotCount);
 			return NULL;
 		}
 
 		UnlockSlots("AddSlot()");
-		logp(DEBUG, "Allocated repeater slots: %d.\n", slotCount);
+		logp(DEBUG, "Allocated repeater slots: %d.", slotCount);
 		return current;
 	}
 
 	/* Unrecheable code, but just in case... */
 	UnlockSlots("AddSlot()");
-	logp(DEBUG, "Allocated repeater slots: %d.\n", slotCount);
+	logp(DEBUG, "Allocated repeater slots: %d.", slotCount);
 }
 
 /* Free any slot if the connection has been reseted by peer */
@@ -258,7 +256,7 @@ void CleanupSlots( void )
 
 	while( current != NULL )
 	{
-		if( ( current->viewer == INVALID_SOCKET ) || ( current->server == INVALID_SOCKET ) ) {
+		if(current->viewer == INVALID_SOCKET || current->server == INVALID_SOCKET) {
 			FD_ZERO( &read_fds );
 			
 			if( current->viewer == INVALID_SOCKET ) {
@@ -276,12 +274,12 @@ void CleanupSlots( void )
 					errno = WSAGetLastError();
 #endif
 					if( errno == ECONNRESET ) {
-						logp(INFO, "Connection closed by server (socket=%d).\n", current->server );
+						logp(INFO, "Connection closed by server (socket=%d).", current->server );
 					} else {
-						logp(INFO, "Closing server (socket=%d) connection due to socket error number %d.\n", current->server, errno);
+						logp(INFO, "Closing server (socket=%d) connection due to socket error number %d.", current->server, errno);
 					}
 				} else if( num_bytes == 0 ){
-						logp(INFO, "Connection closed by server (socket=%d).\n", current->server );
+						logp(INFO, "Connection closed by server (socket=%d).", current->server );
 				} else {
 					/* Server is alive */
 					previous = current;
@@ -303,12 +301,12 @@ void CleanupSlots( void )
 					errno = WSAGetLastError();
 #endif
 					if( errno == ECONNRESET ) {
-						logp(INFO, "Connection closed by viewer (socket=%d).\n", current->viewer );
+						logp(INFO, "Connection closed by viewer (socket=%d).", current->viewer );
 					} else {
-						logp(INFO, "Closing viewer (socket=%d) connection due to socket error number %d.\n", current->viewer, errno);
+						logp(INFO, "Closing viewer (socket=%d) connection due to socket error number %d.", current->viewer, errno);
 					}
 				} else if( num_bytes == 0 ){
-						logp(INFO, "Connection closed by viewer (socket=%d).\n", current->viewer );
+						logp(INFO, "Connection closed by viewer (socket=%d).", current->viewer );
 				} else {
 					/* Server is alive */
 					previous = current;
@@ -328,7 +326,7 @@ void CleanupSlots( void )
 			free( current );
 			current = next;
 			slotCount--;
-			logp(DEBUG, "Slot has been freed. Allocated repeater slots: %d.\n", slotCount);
+			logp(DEBUG, "Slot has been freed. Allocated repeater slots: %d.", slotCount);
 		} else {
 			previous = current;
 			current = current->next;
@@ -348,19 +346,19 @@ repeaterslot * FindSlotByChallenge(unsigned char * challenge)
 		return NULL;
 
 	current = Slots;
-	log(DEBUG, "Trying to find a slot for a challenge ID.\n");
+	log(DEBUG, "Trying to find a slot for a challenge ID.");
 	while( current != NULL)
 	{
 		// ERROR: Getting exception here!!!
 		if( memcmp(challenge, current->challenge, CHALLENGESIZE) == 0 ) {
-			log(DEBUG, "Found a slot assigned to the given challenge ID.\n");
+			log(DEBUG, "Found a slot assigned to the given challenge ID.");
 			UnlockSlots("FindSlotByChallenge()");
 			return current;
 		}
 		current = current->next;
 	}
 
-	log(DEBUG, "Failed to find an assigned slot for the given Challenge ID. Probably a new ID.\n");
+	log(DEBUG, "Failed to find an assigned slot for the given Challenge ID. Probably a new ID.");
 	UnlockSlots("FindSlotByChallenge()");
 	return NULL;
 }
@@ -375,29 +373,29 @@ void FreeSlot(repeaterslot *slot)
 		return;
 
 	if( Slots == NULL ) {
-		log(DEBUG, "There are no slots to be freed.\n");
+		log(DEBUG, "There are no slots to be freed.");
 		UnlockSlots("FreeSlot()");
-		logp(DEBUG, "Allocated repeater slots: %d.\n", slotCount);
+		logp(DEBUG, "Allocated repeater slots: %d.", slotCount);
 		return;
 	}
 
 	current = Slots;
 	previous = NULL;
 
-	logp(DEBUG, "Trying to free slot... (Allocated repeater slots: %d)\n", slotCount);
+	logp(DEBUG, "Trying to free slot... (Allocated repeater slots: %d)", slotCount);
 	while( current != NULL )
 	{
 		if( memcmp(current->challenge, slot->challenge, CHALLENGESIZE) == 0 ) {
 			/* The slot has been found */
-			log(DEBUG, "Slots found. Trying to free resources.\n");
+			log(DEBUG, "Slots found. Trying to free resources.");
 			/* Close server socket */
 			if( slot->server != INVALID_SOCKET ) {
 				shutdown( slot->server, 2 );
 				if( socket_close( slot->server ) == -1 ) {
-					logp(ERROR, "Server socket failed to close. Socket error = %d\n", errno);
+					logp(ERROR, "Server socket failed to close. Socket error = %d", errno);
 				}
 				else {
-					log(DEBUG, "Server socket has been closed.\n");
+					log(DEBUG, "Server socket has been closed.");
 				}
 			}
 
@@ -405,10 +403,10 @@ void FreeSlot(repeaterslot *slot)
 			if( slot->viewer != INVALID_SOCKET ) {
 				shutdown( slot->viewer, 2 );
 				if( socket_close( slot->viewer ) == -1 ) {
-					logp(ERROR, "Viewer socket failed to close. Socket error = %d\n", errno);
+					logp(ERROR, "Viewer socket failed to close. Socket error = %d", errno);
 				}
 				else {
-					log(DEBUG, "Viewer socket has been closed.\n");
+					log(DEBUG, "Viewer socket has been closed.");
 				}
 			}
 
@@ -419,9 +417,9 @@ void FreeSlot(repeaterslot *slot)
 			
 			free( current );
 			slotCount--;
-			log(DEBUG, "Slot has been freed.\n");
+			log(DEBUG, "Slot has been freed.");
 			UnlockSlots("FreeSlot()");
-			logp(DEBUG, "Allocated repeater slots: %d.\n", slotCount);
+			logp(DEBUG, "Allocated repeater slots: %d.", slotCount);
 			return;
 		}
 
@@ -429,9 +427,9 @@ void FreeSlot(repeaterslot *slot)
 		current = current->next;
 	}
 
-	log(FATAL, "Called FreeSlot() but no slot was found.\n");
+	log(FATAL, "Called FreeSlot() but no slot was found.");
 	UnlockSlots("FreeSlot()");
-	logp(DEBUG, "Allocated repeater slots: %d.\n", slotCount);
+	logp(DEBUG, "Allocated repeater slots: %d.", slotCount);
 }
 
 void ListSlots( void )
@@ -443,7 +441,7 @@ void ListSlots( void )
 		return ;
 
 	current = Slots;
-	log(DEBUG, "Listing current connections.\n");
+	log(DEBUG, "Listing current connections.");
 	while( current != NULL)
 	{
 	  if( current->server != INVALID_SOCKET ) {
@@ -457,7 +455,7 @@ void ListSlots( void )
         else 
           log(ERROR, "getpeername() failed");
       else 
-        log(DEBUG, "without viewer \n");
+        log(DEBUG, "without viewer");
     }
     current = current->next;
 	}
@@ -476,7 +474,7 @@ std::string DumpSlots( void )
 		return NULL;
   oss << "[\n";
 	current = Slots;
-	log(DEBUG, "Dumping current connections.\n");
+	log(DEBUG, "Dumping current connections.");
   if (current != NULL )
 	do 
 	{
@@ -500,7 +498,7 @@ std::string DumpSlots( void )
     oss << "}\n";
 	} while ( current != NULL && oss << ", ");
 
-	log(DEBUG, "End of Dumping.\n");
+	log(DEBUG, "End of Dumping.");
 	UnlockSlots("DumpSlots()");
   oss << "]\n";
   return oss.str();

@@ -114,7 +114,7 @@ int logger(char level, const char *fmt, ...)
       sz += strlen(msg);
     }
     va_end(args);
-    fprintf(stderr, "%s", buffer);
+    fprintf(stderr, "%s\n", buffer);
     return 1;
   }
   return 0;
