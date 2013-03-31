@@ -220,7 +220,7 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 	return 0;
 }
 
-void add_new_slot(SOCKET server_socket, SOCKET viewer_socket, unsigned char *challenge)
+void add_new_slot(SOCKET server_socket, SOCKET viewer_socket, unsigned char *challenge, uint32_t code)
 {
 	thread_t repeater_thread = 0; 
   repeaterslot *slot = NewSlot();
@@ -228,10 +228,11 @@ void add_new_slot(SOCKET server_socket, SOCKET viewer_socket, unsigned char *cha
   slot->viewer = viewer_socket;
   slot->timestamp = (unsigned long)::time(NULL);
   memcpy(slot->challenge, challenge, CHALLENGESIZE);
+  slot->code = code;
   slot->next = NULL;
 
   repeaterslot *current = AddSlot(slot);
-  if( current == NULL ) {
+  if(current == NULL) {
     free(slot);
     socket_close(server_socket == INVALID_SOCKET ? current->viewer : current->server);
   } else if( current->server != INVALID_SOCKET && current->viewer != INVALID_SOCKET ) {
@@ -289,7 +290,7 @@ THREAD_CALL server_listen(LPVOID lpParam)
 	char phost[MAX_HOST_NAME_LEN + 1];
 	CARD32 auth_type;
 	unsigned char challenge[CHALLENGESIZE];
-	unsigned long code;
+	uint32_t code;
 	char *ip_addr;
 
 	thread_params->sock = CreateListenerSocket( thread_params->port );
@@ -316,7 +317,7 @@ THREAD_CALL server_listen(LPVOID lpParam)
 		    // Check and cypher the ID
 		    memset(challenge, 0, CHALLENGESIZE);
 		    if( ParseDisplay(host_id, phost, MAX_HOST_NAME_LEN, (int *)&code, challenge) ) {
-  		    logp(DEBUG, "Server (socket=%d) sent the host ID:%d.", conn, code );
+  		    logp(DEBUG, "Server (socket=%d) sent the host ID:%d.", conn, code);
 
 			    // Continue with the handshake until ClientInit. Read the Protocol Version.
 			    if( socket_recv(conn, protocol_version, sz_rfbProtocolVersionMsg, "protocol version from server") ) {
@@ -339,7 +340,7 @@ THREAD_CALL server_listen(LPVOID lpParam)
 				          socket_close(conn);
 			          }
                 else
-                  add_new_slot(conn, INVALID_SOCKET, challenge);
+                  add_new_slot(conn, INVALID_SOCKET, challenge, code);
 			        }
 			      } 
 			    }
@@ -405,7 +406,7 @@ THREAD_CALL viewer_listen(LPVOID lpParam)
 			      // We must send the 16 bytes challenge key.
 			      // In order for this to work the challenge must be always the same.
 			      if( socket_send(conn, (char *)challenge_key, CHALLENGESIZE, "challenge key to viewer") ) {
-  			      logp(DEBUG, "Challenge sent to viewer (socket=%d).", conn );
+  			      logp(DEBUG, "Challenge sent to viewer (socket=%d).", conn);
 
 			        // Read the password. It will be treated as the repeater IDentifier.
 			        memset(challenge, 0, CHALLENGESIZE);
@@ -420,7 +421,7 @@ THREAD_CALL viewer_listen(LPVOID lpParam)
 			            // Retrieve ClientInit and save it inside the structure.
 			            if( socket_recv(conn, (char *)&client_init, sizeof(client_init), "ClientInit from viewer") ) {
 			              logp(DEBUG, "Viewer (socket=%d) sent ClientInit message.", conn);
-                    add_new_slot(INVALID_SOCKET, conn, challenge);
+                    add_new_slot(INVALID_SOCKET, conn, challenge, -1);
 			            } 
 			          }
 			        }
