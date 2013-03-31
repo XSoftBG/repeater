@@ -42,7 +42,7 @@
 #endif
 
 #define MAX_HOST_NAME_LEN	250
-#define IO_BUFFER_SIZE	1024*16 // 16k
+#define IO_BUFFER_SIZE	1024*4 // 4k
 
 bool notstopped; // Global variable
 
@@ -135,10 +135,10 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 			  }
 		  }
 
-      if( viewerbuf_len > 0 || serverbuf_len > 0 ) {
+      if(viewerbuf_len > 0 || serverbuf_len > 0) {
   		  FD_ZERO( &ofds ); 
-			  FD_SET(slot->viewer, &ofds); /** prepare for reading viewer output **/ 
 			  FD_SET(slot->server, &ofds); /** prepare for reading server output **/
+			  FD_SET(slot->viewer, &ofds); /** prepare for reading viewer output **/ 
 
 		    if( ::select(nfds, NULL, &ofds, NULL, NULL) < 0 ) {
 			    logp(ERROR, "do_repeater(): ouput select() failed, errno=%d", errno);
@@ -203,7 +203,6 @@ void add_new_slot(SOCKET server_socket, SOCKET viewer_socket, unsigned char *cha
          server_socket == INVALID_SOCKET ? "server" : "viewer");
   }
 }
-
 
 bool socket_recv(SOCKET s, char * buff, socklen_t bufflen, const char *msg)
 {
