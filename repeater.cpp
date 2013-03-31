@@ -126,21 +126,20 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 	  {
 		  /* Bypass reading if there is still data to be sent in the buffers */
 		  if(serverbuf_len == 0 && viewerbuf_len == 0) {
-			  FD_ZERO( &ifds );
-			  FD_ZERO( &ofds ); 
+  		  FD_ZERO( &ifds );
 			  FD_SET(slot->viewer, &ifds); /** prepare for reading viewer input **/ 
 			  FD_SET(slot->server, &ifds); /** prepare for reading server input **/
 
-			  if( select(nfds, &ifds, &ofds, NULL, NULL) == -1 ) {
-				  logp(ERROR, "do_repeater(): select() failed, errno=%d", errno);
+			  if( select(nfds, &ifds, NULL, NULL, NULL) == -1 ) {
+				  logp(ERROR, "do_repeater(): input select() failed, errno=%d", errno);
           break;
 			  } 		
 
 			  /* server => viewer */ 
-			  if (FD_ISSET(slot->server, &ifds) && serverbuf_len < sizeof(serverbuf)) { 
-				  len = recv(slot->server, serverbuf + serverbuf_len, sizeof(serverbuf) - serverbuf_len, 0); 
+			  if (FD_ISSET(slot->server, &ifds)) { 
+				  len = recv(slot->server, serverbuf, sizeof(serverbuf), 0); 
 				  if(len == 0) { 
-					  log(DEBUG, "do_repeater(): conn closed by server.");
+					  log(DEBUG, "do_repeater(): connection closed by server.");
             break;
 				  } else if(len == -1) {
 					  /* error on reading from stdin */
@@ -156,8 +155,8 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 			  }
 
 			  /* viewer => server */ 
-			  if( FD_ISSET(slot->viewer, &ifds)  && viewerbuf_len < sizeof(viewerbuf) ) {
-				  len = recv(slot->viewer, viewerbuf + viewerbuf_len, sizeof(viewerbuf) - viewerbuf_len, 0);
+			  if( FD_ISSET(slot->viewer, &ifds) ) {
+				  len = recv(slot->viewer, viewerbuf, sizeof(viewerbuf), 0);
 				  if (len == 0) { 
 					  log(DEBUG, "do_repeater(): conn closed by viewer.");
             break;
@@ -175,43 +174,55 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 			  }
 		  }
 
-		  /* flush data in viewerbuffer to server */ 
-		  if( viewerbuf_len > 0 ) { 
-			  len = send(slot->server, viewerbuf, viewerbuf_len, 0); 
-			  if(len == -1) {
-  #ifdef WIN32
-				  errno = WSAGetLastError();
-  #endif
-				  if( errno != EWOULDBLOCK ) {
-					  logp(ERROR, "do_repeater(): send() failed, viewer to server. Socket error = %d", errno);
-				  }
-				  break;
-			  } else if(len > 0) {
-				  /* move data on to top of buffer */ 
-				  viewerbuf_len -= len;
-				  if( viewerbuf_len > 0 ) memcpy(viewerbuf, viewerbuf + len, viewerbuf_len);
-				  assert(0 <= viewerbuf_len); 
-			  }
-		  }
+      if( viewerbuf_len > 0 || serverbuf_len > 0 ) {
 
-		  /* flush data in serverbuffer to viewer */
-		  if( serverbuf_len > 0 ) { 
-			  len = send(slot->viewer, serverbuf, serverbuf_len, 0);
-			  if(len == -1) {
-  #ifdef WIN32
-				  errno = WSAGetLastError();
-  #endif
-				  if( errno != EWOULDBLOCK ) {
-					  logp(ERROR, "do_repeater(): send() failed, server to viewer. Socket error = %d", errno);
-				  }
-				  break;
-			  } else if(len > 0) {
-				  /* move data on to top of buffer */ 
-				  serverbuf_len -= len;
-				  if( len < (int)serverbuf_len ) memcpy(serverbuf, serverbuf + len, serverbuf_len);
-				  assert(0 <= serverbuf_len); 
-			  }
-		  }
+  		  FD_ZERO( &ofds ); 
+			  FD_SET(slot->viewer, &ofds); /** prepare for reading viewer output **/ 
+			  FD_SET(slot->server, &ofds); /** prepare for reading server output **/
+
+		    if( select(nfds, NULL, &ofds, NULL, NULL) == -1 ) {
+			    logp(ERROR, "do_repeater(): ouput select() failed, errno=%d", errno);
+          break;
+		    } 		
+
+		    /* flush data in viewerbuffer to server */ 
+		    if( FD_ISSET(slot->server, &ofds) && viewerbuf_len > 0 ) { 
+			    len = send(slot->server, viewerbuf, viewerbuf_len, 0); 
+			    if(len == -1) {
+    #ifdef WIN32
+				    errno = WSAGetLastError();
+    #endif
+				    if( errno != EWOULDBLOCK ) {
+					    logp(ERROR, "do_repeater(): send() failed, viewer to server. Socket error = %d", errno);
+				    }
+				    break;
+			    } else if(len > 0) {
+				    /* move data on to top of buffer */ 
+				    viewerbuf_len -= len;
+				    if( viewerbuf_len > 0 ) memcpy(viewerbuf, viewerbuf + len, viewerbuf_len);
+				    assert(0 <= viewerbuf_len); 
+			    }
+		    }
+
+		    /* flush data in serverbuffer to viewer */
+		    if( FD_ISSET(slot->viewer, &ofds) && serverbuf_len > 0 ) { 
+			    len = send(slot->viewer, serverbuf, serverbuf_len, 0);
+			    if(len == -1) {
+    #ifdef WIN32
+				    errno = WSAGetLastError();
+    #endif
+				    if( errno != EWOULDBLOCK ) {
+					    logp(ERROR, "do_repeater(): send() failed, server to viewer. Socket error = %d", errno);
+				    }
+				    break;
+			    } else if(len > 0) {
+				    /* move data on to top of buffer */ 
+				    serverbuf_len -= len;
+				    if( len < (int)serverbuf_len ) memcpy(serverbuf, serverbuf + len, serverbuf_len);
+				    assert(0 <= serverbuf_len); 
+			    }
+		    }
+      }
 	  }
   }
 	/** When the thread exits **/
