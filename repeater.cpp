@@ -1,4 +1,5 @@
 /////////////////////////////////////////////////////////////////////////////
+//  Copyright (C) 2013 XSoft Ltd. - www.xsoftbg.com (Andrey Andreev, andreev@xsoftbg.com). All Rights Reserved.
 //  Copyright (C) 2010 Juan Pedro Gonzalez. All Rights Reserved.
 //  Copyright (C) 2005 Jari Korhonen, jarit1.korhonen@dnainternet.net
 //  Copyright (C) 2002 Ultr@VNC Team Members. All Rights Reserved.
@@ -42,7 +43,7 @@
 #endif
 
 #define MAX_HOST_NAME_LEN	250
-#define IO_BUFFER_SIZE	1024*4 // 4k
+int IOBUFFER_SIZE=1024*16; // 16k
 
 bool notstopped; // Global variable
 
@@ -83,142 +84,12 @@ bool ParseDisplay(char *display, char *phost, int hostlen, int *pport, unsigned 
 	return true;
 }
 
-THREAD_CALL do_repeater2(LPVOID lpParam)
-{
-	char viewerbuf[4096];            /* viewer input buffer */
-	unsigned int viewerbuf_len = 0;  /* available data in viewerbuf */
-	char serverbuf[4096];            /* server input buffer */
-	unsigned int serverbuf_len = 0;  /* available data in serverbuf */
-	int len  = 0, nfds = 0;
-	fd_set ifds;
-	fd_set ofds; 
-	CARD8 client_init;
-	repeaterslot *slot = (repeaterslot *)lpParam;
-
-	logp(DEBUG, "do_reapeater(): Starting repeater for ID %d.", slot->code);
-	// Send ClientInit to the server to start repeating
-	client_init = 1;
-	if( socket_write_exact(slot->server, (char *)&client_init, sizeof(client_init)) < 0 ) {
-		log(ERROR, "do_repeater(): Writting ClientInit error.");
-    nfds = 0;
-	} else {
-    nfds = (slot->server > slot->viewer ? slot->server : slot->viewer)+1;
-	  // Start the repeater loop (repeater between stdin/out and socket)
-	  while(true)
-	  {
-		  /* Bypass reading if there is still data to be sent in the buffers */
-		  if(serverbuf_len == 0 && viewerbuf_len == 0) {
-  		  FD_ZERO( &ifds );
-			  FD_SET(slot->viewer, &ifds); /** prepare for reading viewer input **/ 
-			  FD_SET(slot->server, &ifds); /** prepare for reading server input **/
-
-			  if( select(nfds, &ifds, NULL, NULL, NULL) == -1 ) {
-				  logp(ERROR, "do_repeater(): input select() failed, errno=%d", errno);
-          break;
-			  } 		
-
-			  /* server => viewer */ 
-			  if (FD_ISSET(slot->server, &ifds)) { 
-				  len = recv(slot->server, serverbuf, sizeof(serverbuf), 0); 
-				  if(len == 0) { 
-					  log(DEBUG, "do_repeater(): connection closed by server.");
-            break;
-				  } else if(len == -1) {
-					  /* error on reading from stdin */
-  #ifdef WIN32
-					  errno = WSAGetLastError();
-  #endif
-					  logp(ERROR, "Error reading from socket. Socket error = %d.", errno );
-            break;
-				  } else {
-					  /* repeat */
-					  serverbuf_len += len; 
-				  }
-			  }
-
-			  /* viewer => server */ 
-			  if( FD_ISSET(slot->viewer, &ifds) ) {
-				  len = recv(slot->viewer, viewerbuf, sizeof(viewerbuf), 0);
-				  if (len == 0) { 
-					  log(DEBUG, "do_repeater(): conn closed by viewer.");
-            break;
-				  } else if(len == -1) {
-					  /* error on reading from stdin */
-  #ifdef WIN32
-					  errno = WSAGetLastError();
-  #endif
-					  logp(ERROR, "Error reading from socket. Socket error = %d.", errno );
-            break;
-				  } else {
-					  /* repeat */
-					  viewerbuf_len += len; 
-				  }
-			  }
-		  }
-
-      if( viewerbuf_len > 0 || serverbuf_len > 0 ) {
-
-  		  FD_ZERO( &ofds ); 
-			  FD_SET(slot->viewer, &ofds); /** prepare for reading viewer output **/ 
-			  FD_SET(slot->server, &ofds); /** prepare for reading server output **/
-
-		    if( select(nfds, NULL, &ofds, NULL, NULL) == -1 ) {
-			    logp(ERROR, "do_repeater(): ouput select() failed, errno=%d", errno);
-          break;
-		    } 		
-
-		    /* flush data in viewerbuffer to server */ 
-		    if( FD_ISSET(slot->server, &ofds) && viewerbuf_len > 0 ) { 
-			    len = send(slot->server, viewerbuf, viewerbuf_len, 0); 
-			    if(len == -1) {
-    #ifdef WIN32
-				    errno = WSAGetLastError();
-    #endif
-				    if( errno != EWOULDBLOCK ) {
-					    logp(ERROR, "do_repeater(): send() failed, viewer to server. Socket error = %d", errno);
-				    }
-				    break;
-			    } else if(len > 0) {
-				    /* move data on to top of buffer */ 
-				    viewerbuf_len -= len;
-				    if( viewerbuf_len > 0 ) memcpy(viewerbuf, viewerbuf + len, viewerbuf_len);
-				    //assert(0 <= viewerbuf_len); 
-			    }
-		    }
-
-		    /* flush data in serverbuffer to viewer */
-		    if( FD_ISSET(slot->viewer, &ofds) && serverbuf_len > 0 ) { 
-			    len = send(slot->viewer, serverbuf, serverbuf_len, 0);
-			    if(len == -1) {
-    #ifdef WIN32
-				    errno = WSAGetLastError();
-    #endif
-				    if( errno != EWOULDBLOCK ) {
-					    logp(ERROR, "do_repeater(): send() failed, server to viewer. Socket error = %d", errno);
-				    }
-				    break;
-			    } else if(len > 0) {
-				    /* move data on to top of buffer */ 
-				    serverbuf_len -= len;
-				    if( len < (int)serverbuf_len ) memcpy(serverbuf, serverbuf + len, serverbuf_len);
-				    //assert(0 <= serverbuf_len); 
-			    }
-		    }
-      }
-	  }
-  }
-	/** When the thread exits **/
-	FreeSlot(slot);
-	log(INFO, "Repeater thread closed.");
-	return 0;
-}
-
 THREAD_CALL do_repeater(LPVOID lpParam)
 {
-	char viewerbuf[IO_BUFFER_SIZE];  /* viewer input buffer */
+	char viewerbuf[IOBUFFER_SIZE];   /* viewer input buffer */
 	unsigned int viewerbuf_len = 0;  /* available data in viewerbuf */
 	unsigned int viewerbuf_off = 0;  /* offset in viewerbuf */
-	char serverbuf[IO_BUFFER_SIZE];  /* server input buffer */
+	char serverbuf[IOBUFFER_SIZE];   /* server input buffer */
 	unsigned int serverbuf_len = 0;  /* available data in serverbuf */
 	unsigned int serverbuf_off = 0;  /* offset data in serverbuf */
 	int len = 0, nfds = 0;
@@ -536,10 +407,10 @@ void usage(char * appname)
 	fprintf(stderr, "  -viewer port Defines the listening port for incoming VNC viewer connections (default 5900).\n");
 	fprintf(stderr, "  -dump file name Defines the file to dump the json representation of current connections.\n");
 	fprintf(stderr, "  -loglevel level Defines the logger level - ERROR, FATAL, INFO, DEBUG (default INFO).\n");
+	fprintf(stderr, "  -iobuffer_size size Defines the input/output buffer size (default 16kb).\n");
 	fprintf(stderr, "\nFor more information please visit http://code.google.com/p/vncrepeater or https://github.com/XSoftBG/repeater\n\n");
 	exit(1);
 }
-
 
 int main(int argc, char **argv)
 {
@@ -612,6 +483,16 @@ int main(int argc, char **argv)
 				char level = ::get_log_level(argv[(i+1)]);
         if(level == -1) { usage( argv[0] ); return 1; }
         ::logger_level = level;
+        i++; 
+			} else if ( _stricmp( argv[i], "-iobuffer_size" ) == 0 ) {
+        if( (i+i) == argc ) {
+					usage( argv[0] );
+					return 1;
+				}
+
+        int buffer_sz = atoi(argv[(i+1)]);
+        if(buffer_sz <= 0) { usage( argv[0] ); return 1; }
+        IOBUFFER_SIZE = buffer_sz;
         i++; 
       } 
       else {
