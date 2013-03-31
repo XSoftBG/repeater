@@ -83,7 +83,7 @@ bool ParseDisplay(char *display, char *phost, int hostlen, int *pport, unsigned 
 	return true;
 }
 
-THREAD_CALL do_repeater(LPVOID lpParam)
+THREAD_CALL do_repeater2(LPVOID lpParam)
 {
 	char viewerbuf[4096];            /* viewer input buffer */
 	unsigned int viewerbuf_len = 0;  /* available data in viewerbuf */
@@ -213,7 +213,7 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 	return 0;
 }
 
-THREAD_CALL do_repeater2(LPVOID lpParam)
+THREAD_CALL do_repeater(LPVOID lpParam)
 {
 	char viewerbuf[IO_BUFFER_SIZE];  /* viewer input buffer */
 	unsigned int viewerbuf_len = 0;  /* available data in viewerbuf */
@@ -236,8 +236,8 @@ THREAD_CALL do_repeater2(LPVOID lpParam)
 		  /* Bypass reading if there is still data to be sent in the buffers */
 		  if(serverbuf_len == 0 && viewerbuf_len == 0) {
   		  FD_ZERO( &ifds );
-			  FD_SET(slot->viewer, &ifds); /** prepare for reading viewer input **/ 
 			  FD_SET(slot->server, &ifds); /** prepare for reading server input **/
+			  FD_SET(slot->viewer, &ifds); /** prepare for reading viewer input **/ 
 
 			  if( select(nfds, &ifds, NULL, NULL, NULL) < 0 ) {
 				  logp(ERROR, "do_repeater(): input select() failed, errno=%d", errno);

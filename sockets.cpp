@@ -123,8 +123,8 @@ SOCKET create_listener_socket(u_short port)
 
 int socket_read(SOCKET s, char * buff, socklen_t bufflen)
 {
-	const int bytes = recv(s, buff, bufflen, 0);
 	errno = 0;
+	const int bytes = recv(s, buff, bufflen, 0);
 	if(bytes < 0) {
 #ifdef WIN32
 		errno = WSAGetLastError();
@@ -142,8 +142,8 @@ int socket_read(SOCKET s, char * buff, socklen_t bufflen)
 
 int socket_write(SOCKET s, char * buff, socklen_t bufflen)
 {
-  const int bytes = send(s, buff, bufflen, 0); 
 	errno = 0;
+  const int bytes = send(s, buff, bufflen, 0); 
   if(bytes < 0) {
   #ifdef WIN32
     errno = WSAGetLastError();
