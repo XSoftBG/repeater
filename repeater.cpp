@@ -217,10 +217,12 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 {
 	char viewerbuf[IO_BUFFER_SIZE];  /* viewer input buffer */
 	unsigned int viewerbuf_len = 0;  /* available data in viewerbuf */
+	unsigned int viewerbuf_off = 0;  /* offset in viewerbuf */
 	char serverbuf[IO_BUFFER_SIZE];  /* server input buffer */
 	unsigned int serverbuf_len = 0;  /* available data in serverbuf */
+	unsigned int serverbuf_off = 0;  /* offset data in serverbuf */
 	int len = 0, nfds = 0;
-	fd_set ifds, ofds; 
+	fd_set fds; 
 	CARD8 client_init = 1;
 	repeaterslot *slot = (repeaterslot *)lpParam;
 
@@ -235,68 +237,64 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 	  {
 		  /* Bypass reading if there is still data to be sent in the buffers */
 		  if(serverbuf_len == 0 && viewerbuf_len == 0) {
-  		  FD_ZERO( &ifds );
-			  FD_SET(slot->server, &ifds); /** prepare for reading server input **/
-			  FD_SET(slot->viewer, &ifds); /** prepare for reading viewer input **/ 
+  		  FD_ZERO( &fds );
+			  FD_SET(slot->server, &fds); /** prepare for reading server input **/
+			  FD_SET(slot->viewer, &fds); /** prepare for reading viewer input **/ 
 
-			  if( select(nfds, &ifds, NULL, NULL, NULL) < 0 ) {
+			  if( select(nfds, &fds, NULL, NULL, NULL) < 0 ) {
 				  logp(ERROR, "do_repeater(): input select() failed, errno=%d", errno);
           break;
 			  } 		
 
 			  /* server => viewer */ 
-			  if (FD_ISSET(slot->server, &ifds)) { 
+			  if (FD_ISSET(slot->server, &fds)) { 
 				  len = ::socket_read(slot->server, serverbuf, sizeof(serverbuf)); 
-				  logp(DEBUG, "do_repeater(): server_socket_read rv=%d", len);
 				  if (len > 0) {
 					  serverbuf_len += len; /* repeat */
-				  } else if(len < 0) {
-					  break;
-				  }
+            serverbuf_off  = 0;
+				  } else if(len < 0)
+  					  break;
 			  }
 
 			  /* viewer => server */ 
-			  if( FD_ISSET(slot->viewer, &ifds) ) {
+			  if( FD_ISSET(slot->viewer, &fds) ) {
 				  len = ::socket_read(slot->viewer, viewerbuf, sizeof(viewerbuf));
-				  logp(DEBUG, "do_repeater(): viewer_socket_read rv=%d", len);
 				  if (len > 0) {
 					  viewerbuf_len += len;  /* repeat */
-				  } else if(len < 0) {
-					  break;
-				  }
+            viewerbuf_off  = 0;
+				  } else if(len < 0)
+					    break;
 			  }
 		  }
 
       if(viewerbuf_len > 0 || serverbuf_len > 0) {
-  		  FD_ZERO( &ofds ); 
-			  FD_SET(slot->server, &ofds); /** prepare for reading server output **/
-			  FD_SET(slot->viewer, &ofds); /** prepare for reading viewer output **/ 
+  		  FD_ZERO( &fds ); 
+			  FD_SET(slot->server, &fds); /** prepare for reading server output **/
+			  FD_SET(slot->viewer, &fds); /** prepare for reading viewer output **/ 
 
-		    if( ::select(nfds, NULL, &ofds, NULL, NULL) < 0 ) {
+		    if( ::select(nfds, NULL, &fds, NULL, NULL) < 0 ) {
 			    logp(ERROR, "do_repeater(): ouput select() failed, errno=%d", errno);
           break;
 		    } 		
 
 		    /* flush data in viewerbuffer to server */ 
-		    if( FD_ISSET(slot->server, &ofds) && viewerbuf_len > 0 ) { 
-			    len = ::socket_write(slot->server, viewerbuf+(sizeof(viewerbuf)-viewerbuf_len), viewerbuf_len); 
-				  logp(DEBUG, "do_repeater(): server_socket_write rv=%d", len);
+		    if( FD_ISSET(slot->server, &fds) && viewerbuf_len > 0 ) { 
+			    len = ::socket_write(slot->server, viewerbuf+viewerbuf_off, viewerbuf_len); 
 			    if(len > 0) {
 				    viewerbuf_len -= len;
-			    } else if(len < 0) {
-					  break;
-				  }
+            viewerbuf_off += len;
+			    } else if(len < 0)
+  					  break;
 		    }
 
 		    /* flush data in serverbuffer to viewer */
-		    if( FD_ISSET(slot->viewer, &ofds) && serverbuf_len > 0 ) { 
-			    len = ::socket_write(slot->viewer, serverbuf+(sizeof(serverbuf)-serverbuf_len), serverbuf_len);
-				  logp(DEBUG, "do_repeater(): viewer_socket_write rv=%d", len);
+		    if( FD_ISSET(slot->viewer, &fds) && serverbuf_len > 0 ) { 
+			    len = ::socket_write(slot->viewer, serverbuf+serverbuf_off, serverbuf_len);
 			    if(len > 0) {
 				    serverbuf_len -= len;
-			    } else if(len < 0) {
-					  break;
-				  }
+				    serverbuf_off += len;
+			    } else if(len < 0)
+					    break;
 		    }
       }
 	  }
