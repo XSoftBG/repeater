@@ -147,7 +147,7 @@ int socket_write(SOCKET s, char * buff, socklen_t bufflen)
 {
   const int bytes = send(s, buff, bufflen, 0); 
 	errno = 0;
-  if(bytes == -1) {
+  if(bytes < 0) {
   #ifdef WIN32
     errno = WSAGetLastError();
   #endif
