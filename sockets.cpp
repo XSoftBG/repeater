@@ -70,15 +70,13 @@ void WinsockFinalize( void )
 #endif /* END WIN32 */
 
 
-
-
 /*****************************************************************************
  *
  * Common functions
  *
  *****************************************************************************/
 
-SOCKET CreateListenerSocket(u_short port)
+SOCKET create_listener_socket(u_short port)
 {
 	SOCKET              sock;
 	struct sockaddr_in  addr;
@@ -126,19 +124,42 @@ SOCKET CreateListenerSocket(u_short port)
 	return sock;
 }
 
-int  socket_read(SOCKET s, char * buff, socklen_t bufflen)
+int socket_read(SOCKET s, char * buff, socklen_t bufflen)
 {
-	int bytes = recv( s, buff, bufflen, 0);
+	const int bytes = recv(s, buff, bufflen, 0);
 	errno = 0;
 	if(bytes < 0) {
 #ifdef WIN32
 		errno = WSAGetLastError();
 #endif
+    if (errno == EWOULDBLOCK || errno == EAGAIN) return 0;
+    logp(ERROR, "socket_read: socket: %d error: %d.", s, errno );
 		return -1;
 	} else if(bytes == 0) {
 		errno = ENOTCONN;
+    logp(DEBUG, "socket_read: connection closed (socket: %d).", s);
+		return -1;
 	}
 	return bytes;
+}
+
+int socket_write(SOCKET s, char * buff, socklen_t bufflen)
+{
+  const int bytes = send(s, buff, bufflen, 0); 
+	errno = 0;
+  if(bytes == -1) {
+  #ifdef WIN32
+    errno = WSAGetLastError();
+  #endif
+    if (errno == EWOULDBLOCK || errno == EAGAIN) return 0;
+    logp(ERROR, "socket_write: socket: %d error: %d.", s, errno );
+    return -1;
+  } else if(bytes == 0) {
+		errno = ENOTCONN;
+    logp(DEBUG, "socket_write: connection closed (socket: %d).", s);
+		return -1;
+	}
+  return bytes;
 }
 
 int socket_read_exact(SOCKET s, char * buff, socklen_t bufflen)
@@ -148,43 +169,31 @@ int socket_read_exact(SOCKET s, char * buff, socklen_t bufflen)
 	int n;
 
 	while (currlen > 0) {
-		// Wait until some data can be read
-		FD_ZERO( &read_fds );
+		FD_ZERO( &read_fds);
 		FD_SET( s, &read_fds );
 			
-		n = select(s + 1, &read_fds, NULL, NULL, NULL);
-		if( n < 0 ) {
+		n = select(s + 1, &read_fds, NULL, NULL, NULL); // Wait until some data can be read
+		if (n < 0) {
 #ifdef WIN32
 			errno = WSAGetLastError();
 #endif
 			return -1;
-		} else if( n > 2 ) {
+		} else if (n > 2) {
 			log(ERROR, "socket error in select()");
 			return -1;
 		}
 		
 		if( FD_ISSET( s, &read_fds ) ) {
-			// Try to read some data in
 			n = socket_read(s, buff, currlen);
 			if (n > 0) {
-				// Adjust the buffer position and size
 				buff += n;
 				currlen -= n;
-			} else if ( n < 0 ) {
-#ifdef WIN32
-				errno = WSAGetLastError();
-#endif
-				if( errno != EWOULDBLOCK) {
+			} else if (n < 0) {
 					return -1;
 				}
-			} else if (n == 0) {
-				errno = ENOTCONN;
-				return -1;
-			}
 		}
-   }
-
-	return 0;
+  }
+	return bufflen;
 }
 
 int socket_write_exact(SOCKET s, char * buff, socklen_t bufflen)
@@ -194,53 +203,39 @@ int socket_write_exact(SOCKET s, char * buff, socklen_t bufflen)
 	int n;
 
 	while (currlen > 0) {
-		// Wait until some data can be read
 		FD_ZERO( &write_fds );
 		FD_SET( s, &write_fds );
 		
-		n = select(s + 1, NULL, &write_fds, NULL, NULL);
-		if( n < 0 ) {
+		n = select(s + 1, NULL, &write_fds, NULL, NULL); // Wait until some data can be read
+		if (n < 0) {
 #ifdef WIN32
 			errno = WSAGetLastError();
 #endif
 			return -1;
-		} else if( n > 2 ) {
+		} else if(n > 2) {
 			log(ERROR, "socket error in select()");
 			return -1;
 		}
 
-		n = send(s, buff, bufflen, 0);
-
+		n = socket_write(s, buff, bufflen);
 		if (n > 0) {
 			buff += n;
 			currlen -= n;
-		} else if (n == 0) {
-			log(ERROR, "WriteExact: write returned 0?");
-			return -1;
-		} else {
-			/* Negative value. This is an error! */
-#ifdef WIN32
-			errno = WSAGetLastError();
-#endif
+		} else if (n < 0) {
 			return -1;
 		}
 	}
-
-	return 1;
+	return bufflen;
 }
 
 SOCKET  socket_accept(SOCKET s, struct sockaddr * addr, socklen_t * addrlen)
 {
 	SOCKET sock;
 	const int one = 1;
-
 	errno = 0;
-
 #ifdef WIN32
 	u_long ioctlsocket_arg = 1;
 #endif
-
-	sock = INVALID_SOCKET;
 
 	if( ( sock = accept(s, addr, addrlen) ) == INVALID_SOCKET ) {
 #ifdef WIN32
@@ -276,7 +271,6 @@ SOCKET  socket_accept(SOCKET s, struct sockaddr * addr, socklen_t * addrlen)
 		return INVALID_SOCKET;
 	}
 #endif
-
 	return sock;
 }
 
@@ -285,10 +279,10 @@ int socket_close(SOCKET s)
 	errno = 0;
 	shutdown(s, 2);
 #ifdef WIN32
-	if( closesocket( s ) != 0 ) {
+	if( closesocket(s) != 0 ) {
 		errno = WSAGetLastError();
 #else
-	if( close( s ) != 0 ) {
+	if( close(s) != 0 ) {
 #endif
 		return -1;
 	}

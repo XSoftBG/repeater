@@ -25,8 +25,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include <assert.h>
-#include <stdarg.h>
 #include <fcntl.h>
 #include <signal.h>
 
@@ -37,35 +35,26 @@
 #include "vncauth.h"
 #include "repeater.h"
 #include "slots.h"
-#include "config.h"
 #include "version.h"
 
-// Defines
 #ifndef WIN32
 #define _stricmp strcasecmp
 #endif
 
 #define MAX_HOST_NAME_LEN	250
+#define IO_BUFFER_SIZE	1024*16 // 16k
 
-// Structures
+bool notstopped; // Global variable
+
 typedef struct _listener_thread_params {
 	u_short	port;
 	SOCKET	sock;
 } listener_thread_params;
 
-// Global variables
-bool notstopped;
-
 #ifdef WIN32
 void ThreadCleanup(HANDLE hThread, DWORD dwMilliseconds);
 #endif
 
-
-/*****************************************************************************
- *
- * Helpers / Misc.
- *
- *****************************************************************************/
 
 bool ParseDisplay(char *display, char *phost, int hostlen, int *pport, unsigned char *challengedid) 
 {
@@ -95,30 +84,21 @@ bool ParseDisplay(char *display, char *phost, int hostlen, int *pport, unsigned 
 }
 
 
-/*****************************************************************************
- *
- * Threads
- *
- *****************************************************************************/
-
 THREAD_CALL do_repeater(LPVOID lpParam)
 {
-	char viewerbuf[4096];            /* viewer input buffer */
+	char viewerbuf[IO_BUFFER_SIZE];  /* viewer input buffer */
 	unsigned int viewerbuf_len = 0;  /* available data in viewerbuf */
-	char serverbuf[4096];            /* server input buffer */
+	char serverbuf[IO_BUFFER_SIZE];  /* server input buffer */
 	unsigned int serverbuf_len = 0;  /* available data in serverbuf */
-	int len  = 0, nfds = 0;
-	fd_set ifds;
-	fd_set ofds; 
-	CARD8 client_init;
+	int len = 0, nfds = 0;
+	fd_set ifds, ofds; 
+	CARD8 client_init = 1;
 	repeaterslot *slot = (repeaterslot *)lpParam;
 
 	logp(DEBUG, "do_reapeater(): Starting repeater for ID %d.", slot->code);
 	// Send ClientInit to the server to start repeating
-	client_init = 1;
 	if( socket_write_exact(slot->server, (char *)&client_init, sizeof(client_init)) < 0 ) {
 		log(ERROR, "do_repeater(): Writting ClientInit error.");
-    nfds = 0;
 	} else {
     nfds = (slot->server > slot->viewer ? slot->server : slot->viewer)+1;
 	  // Start the repeater loop (repeater between stdin/out and socket)
@@ -137,45 +117,26 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 
 			  /* server => viewer */ 
 			  if (FD_ISSET(slot->server, &ifds)) { 
-				  len = recv(slot->server, serverbuf, sizeof(serverbuf), 0); 
-				  if(len == 0) { 
-					  log(DEBUG, "do_repeater(): connection closed by server.");
-            break;
-				  } else if(len == -1) {
-					  /* error on reading from stdin */
-  #ifdef WIN32
-					  errno = WSAGetLastError();
-  #endif
-					  logp(ERROR, "Error reading from socket. Socket error = %d.", errno );
-            break;
+				  len = socket_read(slot->server, serverbuf, sizeof(serverbuf)); 
+				  if (len > 0) {
+					  serverbuf_len += len; /* repeat */
 				  } else {
-					  /* repeat */
-					  serverbuf_len += len; 
+					  break;
 				  }
 			  }
 
 			  /* viewer => server */ 
 			  if( FD_ISSET(slot->viewer, &ifds) ) {
-				  len = recv(slot->viewer, viewerbuf, sizeof(viewerbuf), 0);
-				  if (len == 0) { 
-					  log(DEBUG, "do_repeater(): conn closed by viewer.");
-            break;
-				  } else if(len == -1) {
-					  /* error on reading from stdin */
-  #ifdef WIN32
-					  errno = WSAGetLastError();
-  #endif
-					  logp(ERROR, "Error reading from socket. Socket error = %d.", errno );
-            break;
-				  } else {
-					  /* repeat */
-					  viewerbuf_len += len; 
+				  len = socket_read(slot->viewer, viewerbuf, sizeof(viewerbuf));
+				  if (len > 0) {
+					  viewerbuf_len += len;  /* repeat */
+				  } else if(len < 0) {
+					  break;
 				  }
 			  }
 		  }
 
       if( viewerbuf_len > 0 || serverbuf_len > 0 ) {
-
   		  FD_ZERO( &ofds ); 
 			  FD_SET(slot->viewer, &ofds); /** prepare for reading viewer output **/ 
 			  FD_SET(slot->server, &ofds); /** prepare for reading server output **/
@@ -187,40 +148,22 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 
 		    /* flush data in viewerbuffer to server */ 
 		    if( FD_ISSET(slot->server, &ofds) && viewerbuf_len > 0 ) { 
-			    len = send(slot->server, viewerbuf, viewerbuf_len, 0); 
-			    if(len == -1) {
-    #ifdef WIN32
-				    errno = WSAGetLastError();
-    #endif
-				    if( errno != EWOULDBLOCK ) {
-					    logp(ERROR, "do_repeater(): send() failed, viewer to server. Socket error = %d", errno);
-				    }
-				    break;
-			    } else if(len > 0) {
-				    /* move data on to top of buffer */ 
+			    len = socket_write(slot->server, viewerbuf+(sizeof(viewerbuf)-viewerbuf_len), viewerbuf_len); 
+			    if(len > 0) {
 				    viewerbuf_len -= len;
-				    if( viewerbuf_len > 0 ) memcpy(viewerbuf, viewerbuf + len, viewerbuf_len);
-				    assert(0 <= viewerbuf_len); 
-			    }
+			    } else if(len < 0) {
+					  break;
+				  }
 		    }
 
 		    /* flush data in serverbuffer to viewer */
 		    if( FD_ISSET(slot->viewer, &ofds) && serverbuf_len > 0 ) { 
-			    len = send(slot->viewer, serverbuf, serverbuf_len, 0);
-			    if(len == -1) {
-    #ifdef WIN32
-				    errno = WSAGetLastError();
-    #endif
-				    if( errno != EWOULDBLOCK ) {
-					    logp(ERROR, "do_repeater(): send() failed, server to viewer. Socket error = %d", errno);
-				    }
-				    break;
-			    } else if(len > 0) {
-				    /* move data on to top of buffer */ 
+			    len = socket_write(slot->viewer, serverbuf+(sizeof(serverbuf)-serverbuf_len), serverbuf_len);
+			    if(len > 0) {
 				    serverbuf_len -= len;
-				    if( len < (int)serverbuf_len ) memcpy(serverbuf, serverbuf + len, serverbuf_len);
-				    assert(0 <= serverbuf_len); 
-			    }
+			    } else if(len < 0) {
+					  break;
+				  }
 		    }
       }
 	  }
@@ -304,7 +247,7 @@ THREAD_CALL server_listen(LPVOID lpParam)
 	uint32_t code;
 	char *ip_addr;
 
-	thread_params->sock = CreateListenerSocket( thread_params->port );
+	thread_params->sock = create_listener_socket( thread_params->port );
 	if ( thread_params->sock == INVALID_SOCKET ) {
 		notstopped = false;
 	} else {
@@ -381,7 +324,7 @@ THREAD_CALL viewer_listen(LPVOID lpParam)
 	unsigned char challenge[CHALLENGESIZE];
 	char * ip_addr;
 
-	thread_params->sock = CreateListenerSocket( thread_params->port );
+	thread_params->sock = create_listener_socket( thread_params->port );
 	if ( thread_params->sock == INVALID_SOCKET ) {
 		notstopped = false;
 	} else {
@@ -458,36 +401,25 @@ void ExitRepeater(int sig)
 void usage(char * appname)
 {
 	fprintf(stderr, "\nUsage: %s [-server port] [-viewer port]\n\n", appname);
-	fprintf(stderr, "  -server port  Defines the listening port for incoming VNC Server connections.\n");
-	fprintf(stderr, "  -viewer port  Defines the listening port for incoming VNC viewer connections.\n");
-	fprintf(stderr, "  -dump file  Defines the file to dump the json representation of current connections.\n");
-	fprintf(stderr, "  -loglevel level Defines the logger level - ERROR, FATAL, INFO, DEBUG.\n");
-	fprintf(stderr, "\nFor more information please visit http://code.google.com/p/vncrepeater\n\n");
+	fprintf(stderr, "  -server port Defines the listening port for incoming VNC Server connections (default 5500).\n");
+	fprintf(stderr, "  -viewer port Defines the listening port for incoming VNC viewer connections (default 5900).\n");
+	fprintf(stderr, "  -dump file name Defines the file to dump the json representation of current connections.\n");
+	fprintf(stderr, "  -loglevel level Defines the logger level - ERROR, FATAL, INFO, DEBUG (default INFO).\n");
+	fprintf(stderr, "\nFor more information please visit http://code.google.com/p/vncrepeater or https://github.com/XSoftBG/repeater\n\n");
 	exit(1);
 }
 
-/*****************************************************************************
- *
- * Main entry point
- *
- *****************************************************************************/
 
 int main(int argc, char **argv)
 {
 	listener_thread_params *server_thread_params;
 	listener_thread_params *viewer_thread_params;
-	u_short server_port;
-	u_short viewer_port;
+	u_short server_port = 5500;
+	u_short viewer_port = 5900;
 	int t_result;
   char * dump_file = NULL;
 	thread_t hServerThread;
 	thread_t hViewerThread;
-
-	/* Load configuration file */
-	if( GetConfigurationPort("ServerPort", &server_port) == 0 )
-		server_port = 5500;
-	if( GetConfigurationPort("ViewerPort", &viewer_port) == 0 )
-		viewer_port = 5900;
 
 	/* Arguments */
 	if( argc > 1 ) {
@@ -567,7 +499,8 @@ int main(int argc, char **argv)
 	/* Start */
 	logp(ERROR, "VNC Repeater [Version %s]", VNCREPEATER_VERSION);
 	log(INFO, "Copyright (C) 2010 Juan Pedro Gonzalez Gutierrez. Licensed under GPL v2.");
-	log(INFO, "Get the latest version at http://code.google.com/p/vncrepeater/\n");
+	log(INFO, "Copyright (C) 2013 XSoft Ltd. - www.xsoftbg.com. Licensed under GPL v2.");
+	log(INFO, "Get the latest version at http://code.google.com/p/vncrepeater/ or https://github.com/XSoftBG/repeater\n");
 
 	/* Initialize some variables */
 	notstopped = true;
@@ -628,14 +561,13 @@ int main(int argc, char **argv)
 
 		/* Take a "nap" so CPU usage doesn't go up. */
 #ifdef WIN32
-		Sleep( 50000 );
+		Sleep(5000000);
 #else
-		usleep( 5000000 );
+		usleep(5000000);
 #endif
 	}
 
   log(ERROR, "\nExiting VNC Repeater...\n");
-
 	notstopped = false;
 
 	/* Free the repeater slots */
@@ -667,7 +599,6 @@ int main(int argc, char **argv)
 	 // Cleanup Winsock.
 	 WinsockFinalize();
 #endif
-
 	 return 0;
 }
 

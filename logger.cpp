@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////////
-//  Copyright (C) 2013 XSoft Ltd Bulgaria. All Rights Reserved.
+//  Copyright (C) 2013 XSoft Ltd. - Bulgaria. All Rights Reserved.
 //  Author: Andrey Maximov Andreev 
 //  andreev@xsoftbg.com
 //  www.xsoftbg.com
