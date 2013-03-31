@@ -474,7 +474,6 @@ std::string DumpSlots( void )
 		return NULL;
   oss << "[\n";
 	current = Slots;
-	log(DEBUG, "Dumping current connections.");
   if (current != NULL )
 	do 
 	{
@@ -498,9 +497,9 @@ std::string DumpSlots( void )
     oss << "}\n";
 	} while ( current != NULL && oss << ", ");
 
-	log(DEBUG, "End of Dumping.");
 	UnlockSlots("DumpSlots()");
   oss << "]\n";
+	log(DEBUG, "Dump current connections.");
   return oss.str();
 }
 
