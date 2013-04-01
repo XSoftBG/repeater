@@ -202,7 +202,7 @@ repeaterslot * AddSlot(repeaterslot *slot)
 			slotCount++;
 		}
 		UnlockSlots("AddSlot()");
-		logp(DEBUG, "Allocated repeater slots: %d.", slotCount);
+		logp(DEBUG, "Allocated repeater slots: %d (returns first new slot).", slotCount);
 		return Slots;
 	} else {
 		current = FindSlotByChallenge( slot->challenge );
@@ -212,7 +212,7 @@ repeaterslot * AddSlot(repeaterslot *slot)
 			Slots = slot;
 			slotCount++;
 			UnlockSlots("AddSlot()");
-			logp(DEBUG, "Allocated repeater slots: %d.", slotCount);
+			logp(DEBUG, "Allocated repeater slots: %d (returns new slot).", slotCount);
 			return Slots;
 		} else if( current->server == INVALID_SOCKET && slot->server != INVALID_SOCKET ) {
 			current->server = slot->server;
@@ -221,12 +221,12 @@ repeaterslot * AddSlot(repeaterslot *slot)
 			current->viewer = slot->viewer;
 		} else {
 			UnlockSlots("AddSlot()");
-			logp(DEBUG, "Allocated repeater slots: %d.", slotCount);
+			logp(DEBUG, "Allocated repeater slots: %d (returns null).", slotCount);
 			return NULL;
 		}
 
 		UnlockSlots("AddSlot()");
-		logp(DEBUG, "Allocated repeater slots: %d.", slotCount);
+		logp(DEBUG, "Allocated repeater slots: %d (returns an existing slot)", slotCount);
 		return current;
 	}
 

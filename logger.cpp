@@ -104,14 +104,12 @@ int logger(char level, const char *fmt, ...)
     const char *ts = ::millitime_str( ::millitime() );
     const char * str_level = get_log_level_name(level);
     size_t sz = snprintf( buffer, buffer_sz, "[%s][%s] ", ts, str_level);
-    int n = vsnprintf( buffer+sz, buffer_sz-sz, fmt, args);
-    if( n > 0 ) sz += n;
-    if( n < 0 || sz >= buffer_sz )
+    const int n = vsnprintf( buffer+sz, buffer_sz-sz, fmt, args);
+    if (n > 0) sz += n;
+    if (n < 0 || sz >= buffer_sz)
     {
-      sz = buffer_sz;
-      const char *msg = "... \n**** MESSAGE TRUNCATED ****\n";
-      strcpy( buffer+sz, msg );
-      sz += strlen(msg);
+      const char *msg = "...MESSAGE TRUNCATED !!!";
+      strncpy( buffer+buffer_sz, msg, strlen(msg) );
     }
     va_end(args);
     fprintf(stderr, "%s\n", buffer);
