@@ -27,12 +27,9 @@
  *
  */
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #ifdef WIN32
 #include <process.h>
 #else
@@ -46,7 +43,6 @@
  *   file system is secure but nonetheless don't want to store passwords
  *   as plaintext.
  */
-
 unsigned char fixedkey[8] = {23,82,107,6,35,78,88,7};
 
 /*
@@ -54,25 +50,16 @@ unsigned char fixedkey[8] = {23,82,107,6,35,78,88,7};
  */
 int vncEncryptPasswd(char *passwd, unsigned char *encryptedPasswd)
 {
-    size_t i;
+  /* pad password with nulls */
+  for (size_t i = 0; i < MAXPWLEN; i++) {
+    encryptedPasswd[i] = i < strlen(passwd) ? passwd[i] : 0;
+  }
 
-    /* pad password with nulls */
-
-    for (i = 0; i < MAXPWLEN; i++) {
-	    if (i < strlen(passwd)) {
-	        encryptedPasswd[i] = passwd[i];
-	    } else {
-	        encryptedPasswd[i] = 0;
-	    }
-    }
-
-    /* Do encryption in-place - this way we overwrite our copy of the plaintext
-       password */
-
-    deskey(fixedkey, EN0);
-    des(encryptedPasswd, encryptedPasswd);
-
-    return 8;
+  /* Do encryption in-place - this way we overwrite our copy of the plaintext
+     password */
+  deskey(fixedkey, EN0);
+  des(encryptedPasswd, encryptedPasswd);
+  return 8;
 }
 
 /*
@@ -82,14 +69,14 @@ int vncEncryptPasswd(char *passwd, unsigned char *encryptedPasswd)
  */
 char * vncDecryptPasswd(unsigned char *inouttext)
 {
-    unsigned char *passwd = (unsigned char *)malloc(9);
+  unsigned char *passwd = (unsigned char *)malloc(9);
 
-    deskey(fixedkey, DE1);
-    des(inouttext, passwd);
+  deskey(fixedkey, DE1);
+  des(inouttext, passwd);
 
-    passwd[8] = 0;
+  passwd[8] = 0;
 
-    return (char *)passwd;
+  return (char *)passwd;
 }
 
 
@@ -98,7 +85,6 @@ char * vncDecryptPasswd(unsigned char *inouttext)
  */
 void vncRandomBytes(unsigned char *where) 
 {
-  int i;
   static unsigned int seed;
 #ifdef WIN32
   seed += (unsigned int) time(0) + _getpid() + _getpid() * 987654;
@@ -107,7 +93,7 @@ void vncRandomBytes(unsigned char *where)
 #endif
 
   srand(seed);
-  for (i=0; i < CHALLENGESIZE; i++) {
+  for (size_t i = 0; i < CHALLENGESIZE; i++) {
     where[i] = (unsigned char)(rand() & 255);    
   }
 }
@@ -117,23 +103,17 @@ void vncRandomBytes(unsigned char *where)
  */
 void vncEncryptBytes(unsigned char *where, const char *passwd)
 {
-    unsigned char key[8];
-    size_t i;
+  unsigned char key[8];
 
-    /* key is simply password padded with nulls */
+  /* key is simply password padded with nulls */
+  for (size_t i = 0; i < 8; i++) {
+    key[i] = i < strlen(passwd) ? passwd[i] : 0;
+  }
 
-    for (i = 0; i < 8; i++) {
-	    if (i < strlen(passwd)) {
-	        key[i] = passwd[i];
-	    } else {
-	        key[i] = 0;
-	    }
-    }
+  deskey(key, EN0);
 
-    deskey(key, EN0);
-
-    for (i = 0; i < CHALLENGESIZE; i += 8) {
-	    des(where+i, where+i);
-    }
+  for (size_t i = 0; i < CHALLENGESIZE; i += 8) {
+    des(where+i, where+i);
+  }
 }
 

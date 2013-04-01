@@ -200,13 +200,12 @@ void add_new_slot(SOCKET server_socket, SOCKET viewer_socket, unsigned char *cha
   slot->next = NULL;
 
   repeaterslot *current = AddSlot(slot);
-  if(current == NULL) {
+  if (current == NULL) {
     free(slot);
     socket_close(server_socket == INVALID_SOCKET ? current->viewer : current->server);
-  } else if( current->server != INVALID_SOCKET && current->viewer != INVALID_SOCKET ) {
-    // ToDo: repeater_thread should be stored inside the slot in order to access it
-    if( notstopped ) {
-      if( thread_create(&repeater_thread, NULL, do_repeater, (LPVOID)current) != 0 ) {
+  } else if (current->server != INVALID_SOCKET && current->viewer != INVALID_SOCKET) {
+    if (notstopped) {
+      if (thread_create(&repeater_thread, NULL, do_repeater, (LPVOID)current) != 0) {
 	      log(FATAL, "Unable to create the repeater thread.");
 	      notstopped = false;
       }

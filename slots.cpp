@@ -214,10 +214,10 @@ repeaterslot * AddSlot(repeaterslot *slot)
 			UnlockSlots("AddSlot()");
 			logp(DEBUG, "Allocated repeater slots: %d.", slotCount);
 			return Slots;
-		} else if( current->server == INVALID_SOCKET ) {
+		} else if( current->server == INVALID_SOCKET && slot->server != INVALID_SOCKET ) {
 			current->server = slot->server;
 			current->code = slot->code;
-		} else if( current->viewer == INVALID_SOCKET ) {
+		} else if( current->viewer == INVALID_SOCKET && slot->viewer != INVALID_SOCKET ) {
 			current->viewer = slot->viewer;
 		} else {
 			UnlockSlots("AddSlot()");
