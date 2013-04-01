@@ -51,10 +51,6 @@ typedef struct _listener_thread_params {
 	SOCKET	sock;
 } listener_thread_params;
 
-#ifdef WIN32
-void ThreadCleanup(HANDLE hThread, DWORD dwMilliseconds);
-#endif
-
 
 bool ParseDisplay(char *display, char *phost, int hostlen, int *pport, unsigned char *challengedid) 
 {
@@ -183,12 +179,12 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 	  }
   }
 	/** When the thread exits **/
-  if( server_closed && viewer_closed ) FreeSlot(slot);
+  if (server_closed && viewer_closed) FreeSlot(slot);
   else
-  if( server_closed ) { socket_close(slot->server); slot->server = INVALID_SOCKET; } 
+  if (server_closed) { socket_close(slot->server); slot->server = INVALID_SOCKET; } 
   else
-  if( viewer_closed ) { socket_close(slot->viewer); slot->viewer = INVALID_SOCKET; }
-	log(INFO, "Repeater thread closed.");
+  if (viewer_closed) { socket_close(slot->viewer); slot->viewer = INVALID_SOCKET; }
+	logp(INFO, "Repeater thread closed (server_closed=%d, viewer_closed=%d).", server_closed, viewer_closed);
 	return 0;
 }
 

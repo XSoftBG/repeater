@@ -19,7 +19,6 @@
 //
 /////////////////////////////////////////////////////////////////////////////
 
-#include <time.h>
 #include "thread.h"
 #include "logger.h"
 #ifndef WIN32
@@ -44,16 +43,11 @@ thread_create(thread_t * thread, LPTHREAD_SECURITY_ATTRIBUTES attr, void *(*star
 {
 #ifdef WIN32
 	DWORD dwThreadId;
-	DWORD dwLastError;
 
 	*thread = CreateThread(attr, 0, start_routine, arg, 0, &dwThreadId);
 	if( *thread == NULL ) {
-		dwLastError = GetLastError();
-		if( dwLastError == 0 ) {
-			return -1;
-		} else {
-			return dwLastError;
-		}
+		const DWORD dwLastError = GetLastError();
+    return dwLastError == 0 ? -1 : dwLastError;
 	} else {
 		return 0;
 	}
@@ -61,7 +55,6 @@ thread_create(thread_t * thread, LPTHREAD_SECURITY_ATTRIBUTES attr, void *(*star
 	return pthread_create(thread, attr, start_routine, arg);
 #endif
 	/* If successful, the pthread_create() function shall return zero; otherwise, an error number shall be returned to indicate the error. */
-	return 0;
 }
 
 int thread_join( thread_t thread, unsigned int seconds)
@@ -79,7 +72,6 @@ int thread_join( thread_t thread, unsigned int seconds)
 #else
 	rc = WaitForSingleObject( thread, ( seconds * 1000 ) );
 #endif
-	
 	return rc;
 }
 
@@ -122,7 +114,6 @@ int thread_terminate(thread_t thread)
 #else
 	rc = pthread_cancel( thread );
 #endif
-
 	return rc;
 }
 
