@@ -187,7 +187,7 @@ repeaterslot * AddSlot(repeaterslot *slot)
 		log(ERROR, "Memory allocation problem detected while trying to add a slot.");
 		UnlockSlots("AddSlot()");
 		return NULL;
-	} else if( ( max_slots > 0 ) && (max_slots == slotCount) ) {
+	} else if( max_slots > 0 && max_slots == slotCount ) {
 		log(ERROR, "All the slots are in use.");
 		UnlockSlots("AddSlot()");
 		return NULL;
@@ -347,7 +347,7 @@ repeaterslot * FindSlotByChallenge(unsigned char * challenge)
 
 	current = Slots;
 	log(DEBUG, "Trying to find a slot for a challenge ID.");
-	while( current != NULL)
+	while(current != NULL)
 	{
 		// ERROR: Getting exception here!!!
 		if( memcmp(challenge, current->challenge, CHALLENGESIZE) == 0 ) {

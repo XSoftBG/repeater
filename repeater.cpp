@@ -34,7 +34,6 @@
 #include "sockets.h"
 #include "rfb.h"
 #include "vncauth.h"
-#include "repeater.h"
 #include "slots.h"
 #include "version.h"
 
@@ -89,9 +88,11 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 	char viewerbuf[IOBUFFER_SIZE];   /* viewer input buffer */
 	unsigned int viewerbuf_len = 0;  /* available data in viewerbuf */
 	unsigned int viewerbuf_off = 0;  /* offset in viewerbuf */
+  bool         viewer_closed = false; /* viewer socket closed */
 	char serverbuf[IOBUFFER_SIZE];   /* server input buffer */
 	unsigned int serverbuf_len = 0;  /* available data in serverbuf */
 	unsigned int serverbuf_off = 0;  /* offset data in serverbuf */
+  bool         server_closed = false; /* server socket closed */
 	int len = 0, nfds = 0;
 	fd_set fds; 
 	CARD8 client_init = 1;
@@ -101,19 +102,21 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 	// Send ClientInit to the server to start repeating
 	if( socket_write_exact(slot->server, (char *)&client_init, sizeof(client_init)) < 0 ) {
 		log(ERROR, "do_repeater(): Writting ClientInit error.");
+    viewer_closed = server_closed = true;
 	} else {
     nfds = (slot->server > slot->viewer ? slot->server : slot->viewer)+1;
 	  // Start the repeater loop (repeater between stdin/out and socket)
 	  while(true)
 	  {
 		  /* Bypass reading if there is still data to be sent in the buffers */
-		  if(serverbuf_len == 0 && viewerbuf_len == 0) {
+		  if (serverbuf_len == 0 && viewerbuf_len == 0) {
   		  FD_ZERO( &fds );
 			  FD_SET(slot->server, &fds); /** prepare for reading server input **/
 			  FD_SET(slot->viewer, &fds); /** prepare for reading viewer input **/ 
 
 			  if( select(nfds, &fds, NULL, NULL, NULL) < 0 ) {
 				  logp(ERROR, "do_repeater(): input select() failed, errno=%d", errno);
+          viewer_closed = server_closed = true;
           break;
 			  } 		
 
@@ -123,8 +126,10 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 				  if (len > 0) {
 					  serverbuf_len += len; /* repeat */
             serverbuf_off  = 0;
-				  } else if(len < 0)
+				  } else if (len < 0) {
+              server_closed = true;
   					  break;
+          }
 			  }
 
 			  /* viewer => server */ 
@@ -133,45 +138,56 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 				  if (len > 0) {
 					  viewerbuf_len += len;  /* repeat */
             viewerbuf_off  = 0;
-				  } else if(len < 0)
+				  } else if (len < 0) {
+              viewer_closed = true;
 					    break;
+          }
 			  }
 		  }
 
-      if(viewerbuf_len > 0 || serverbuf_len > 0) {
+      if (viewerbuf_len > 0 || serverbuf_len > 0) {
   		  FD_ZERO( &fds ); 
 			  FD_SET(slot->server, &fds); /** prepare for reading server output **/
 			  FD_SET(slot->viewer, &fds); /** prepare for reading viewer output **/ 
 
 		    if( ::select(nfds, NULL, &fds, NULL, NULL) < 0 ) {
 			    logp(ERROR, "do_repeater(): ouput select() failed, errno=%d", errno);
+          viewer_closed = server_closed = true;
           break;
 		    } 		
 
 		    /* flush data in viewerbuffer to server */ 
 		    if( FD_ISSET(slot->server, &fds) && viewerbuf_len > 0 ) { 
 			    len = ::socket_write(slot->server, viewerbuf+viewerbuf_off, viewerbuf_len); 
-			    if(len > 0) {
+			    if (len > 0) {
 				    viewerbuf_len -= len;
             viewerbuf_off += len;
-			    } else if(len < 0)
+			    } else if (len < 0) {
+              server_closed = true;
   					  break;
+          }
 		    }
 
 		    /* flush data in serverbuffer to viewer */
 		    if( FD_ISSET(slot->viewer, &fds) && serverbuf_len > 0 ) { 
 			    len = ::socket_write(slot->viewer, serverbuf+serverbuf_off, serverbuf_len);
-			    if(len > 0) {
+			    if (len > 0) {
 				    serverbuf_len -= len;
 				    serverbuf_off += len;
-			    } else if(len < 0)
+			    } else if (len < 0) {
+              viewer_closed = true;
 					    break;
+          }
 		    }
       }
 	  }
   }
 	/** When the thread exits **/
-	FreeSlot(slot);
+  if( server_closed && viewer_closed ) FreeSlot(slot);
+  else
+  if( server_closed ) { socket_close(slot->server); slot->server = INVALID_SOCKET; } 
+  else
+  if( viewer_closed ) { socket_close(slot->viewer); slot->viewer = INVALID_SOCKET; }
 	log(INFO, "Repeater thread closed.");
 	return 0;
 }
@@ -200,10 +216,10 @@ void add_new_slot(SOCKET server_socket, SOCKET viewer_socket, unsigned char *cha
       }
     }
   } else {
-    logp(DEBUG, "%s (socket=%d) waiting for %s to connect...", 
-         server_socket == INVALID_SOCKET ? "Viewer" : "Server",
-         server_socket == INVALID_SOCKET ? current->viewer : current->server, 
-         server_socket == INVALID_SOCKET ? "server" : "viewer");
+      logp(DEBUG, "%s (socket=%d) waiting for %s to connect...", 
+           server_socket == INVALID_SOCKET ? "Viewer" : "Server",
+           server_socket == INVALID_SOCKET ? current->viewer : current->server, 
+           server_socket == INVALID_SOCKET ? "server" : "viewer");
   }
 }
 

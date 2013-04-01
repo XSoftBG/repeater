@@ -30,28 +30,18 @@
 int mutex_destroy( mutex_t * mutex)
 {
 #ifdef WIN32
-	if( CloseHandle( *mutex ) == 0 ) {
-		return GetLastError();
-	} else {
-		return 0;
-	}
+	return CloseHandle( *mutex ) == 0 ?  GetLastError() : 0;
 #else
 	return pthread_mutex_destroy( mutex );
 #endif
 }
 
-
 int mutex_init( mutex_t * mutex )
 {
 #ifdef WIN32
 	*mutex = (mutex_t)CreateMutex( NULL, FALSE, NULL);
-	
-	if( *mutex == NULL )
-		return GetLastError();
-	else
-		return 0;
+	return *mutex == NULL ? GetLastError() : 0;
 #else
-	int retVal;
 	pthread_mutexattr_t mutexattr;
 
 	pthread_mutexattr_init(&mutexattr);
@@ -60,7 +50,7 @@ int mutex_init( mutex_t * mutex )
 	pthread_mutexattr_settype(&mutexattr, PTHREAD_MUTEX_RECURSIVE_NP);
 
 	// Create the mutex with the attributes set
-	retVal = pthread_mutex_init( mutex, &mutexattr );
+	const int retVal = pthread_mutex_init( mutex, &mutexattr );
 
 	// Destroy the attribute
 	pthread_mutexattr_destroy( &mutexattr );
@@ -69,32 +59,20 @@ int mutex_init( mutex_t * mutex )
 #endif
 }
 
-
 int mutex_lock( mutex_t * mutex )
 {
 #ifdef WIN32
-	DWORD dwWaitResult;
-
-	dwWaitResult = WaitForSingleObject( *mutex, INFINITE );
-	if( dwWaitResult == WAIT_FAILED ) {
-		return GetLastError();
-	} else {
-		return dwWaitResult;
-	}
+	DWORD dwWaitResult = WaitForSingleObject( *mutex, INFINITE );
+	return dwWaitResult == WAIT_FAILED ? GetLastError() : dwWaitResult;
 #else
 	return pthread_mutex_lock( mutex );
 #endif
 }
 
-
 int mutex_unlock( mutex_t * mutex )
 {
 #ifdef WIN32
-	if( ReleaseMutex( *mutex ) == 0 ) {
-		return GetLastError();
-	} else {
-		return 0;
-	}
+	return ReleaseMutex( *mutex ) == 0 ? GetLastError() : 0;
 #else
 	return pthread_mutex_unlock( mutex );
 #endif
