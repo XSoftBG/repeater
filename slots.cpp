@@ -226,7 +226,7 @@ repeaterslot * AddSlot(repeaterslot *slot)
 		}
 
 		UnlockSlots("AddSlot()");
-		logp(DEBUG, "Allocated repeater slots: %d (returns an existing slot)", slotCount);
+		logp(DEBUG, "Allocated repeater slots: %d (returns an existing slot - server: %d, viewer: %d)", slotCount, current->server, current->viewer);
 		return current;
 	}
 
