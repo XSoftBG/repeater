@@ -183,7 +183,16 @@ THREAD_CALL do_repeater(LPVOID lpParam)
   else
   if (server_closed) { socket_close(slot->server); slot->server = INVALID_SOCKET; slot->server_initialized = false; } 
   else
-  if (viewer_closed) { socket_close(slot->viewer); slot->viewer = INVALID_SOCKET; }
+  if (viewer_closed) 
+  { 
+    socket_close(slot->viewer); 
+    slot->viewer = INVALID_SOCKET;
+    if( socket_write_exact(slot->server, (char *)&client_init, sizeof(client_init)) < 0)
+    {
+  		logp(ERROR, "do_repeater(): Writting the ClientInit message to server (socket=%d) returned socket error %d.", slot->server, errno);
+      slot->server_initialized = false;
+    }
+  }
 	logp(INFO, "Repeater thread closed (server_closed=%d, server_initialized=%d, viewer_closed=%d).", server_closed, slot->server_initialized, viewer_closed);
 	return 0;
 }
