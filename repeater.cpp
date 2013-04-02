@@ -94,7 +94,7 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 	fd_set fds; 
 	CARD8 client_init = 1;
 
-	logp(DEBUG, "do_reapeater(): Starting repeater for ID %d.", slot->code);
+	logp(DEBUG, "do_reapeater(): Starting repeater for ID %d, server_initialized=.", slot->code, slot->server_initialized);
   if (!slot->server_initialized)
     slot->server_initialized = socket_write_exact(slot->server, (char *)&client_init, sizeof(client_init)) > 0; // Send ClientInit to the server to start repeating
 
@@ -181,10 +181,10 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 	/** When the thread exits **/
   if (server_closed && viewer_closed) FreeSlot(slot);
   else
-  if (server_closed) { socket_close(slot->server); slot->server = INVALID_SOCKET; } 
+  if (server_closed) { socket_close(slot->server); slot->server = INVALID_SOCKET; slot->server_initialized = false; } 
   else
   if (viewer_closed) { socket_close(slot->viewer); slot->viewer = INVALID_SOCKET; }
-	logp(INFO, "Repeater thread closed (server_closed=%d, viewer_closed=%d).", server_closed, viewer_closed);
+	logp(INFO, "Repeater thread closed (server_closed=%d, server_initialized=%d, viewer_closed=%d).", server_closed, slot->server_initialized, viewer_closed);
 	return 0;
 }
 
