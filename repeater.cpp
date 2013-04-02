@@ -81,26 +81,24 @@ bool ParseDisplay(char *display, char *phost, int hostlen, int *pport, unsigned 
 
 THREAD_CALL do_repeater(LPVOID lpParam)
 {
-	char viewerbuf[IOBUFFER_SIZE];   /* viewer input buffer */
-	unsigned int viewerbuf_len = 0;  /* available data in viewerbuf */
-	unsigned int viewerbuf_off = 0;  /* offset in viewerbuf */
+	char viewerbuf[IOBUFFER_SIZE];      /* viewer input buffer */
+	unsigned int viewerbuf_len = 0;     /* available data in viewerbuf */
+	unsigned int viewerbuf_off = 0;     /* offset in viewerbuf */
   bool         viewer_closed = false; /* viewer socket closed */
-	char serverbuf[IOBUFFER_SIZE];   /* server input buffer */
-	unsigned int serverbuf_len = 0;  /* available data in serverbuf */
-	unsigned int serverbuf_off = 0;  /* offset data in serverbuf */
+	char serverbuf[IOBUFFER_SIZE];      /* server input buffer */
+	unsigned int serverbuf_len = 0;     /* available data in serverbuf */
+	unsigned int serverbuf_off = 0;     /* offset data in serverbuf */
   bool         server_closed = false; /* server socket closed */
-	int len = 0, nfds = 0;
+	repeaterslot *slot = (repeaterslot *)lpParam;
+	int len = 0, nfds = (slot->server > slot->viewer ? slot->server : slot->viewer)+1;
 	fd_set fds; 
 	CARD8 client_init = 1;
-	repeaterslot *slot = (repeaterslot *)lpParam;
 
 	logp(DEBUG, "do_reapeater(): Starting repeater for ID %d.", slot->code);
-	// Send ClientInit to the server to start repeating
-	if( socket_write_exact(slot->server, (char *)&client_init, sizeof(client_init)) < 0 ) {
-		log(ERROR, "do_repeater(): Writting ClientInit error.");
-    viewer_closed = server_closed = true;
-	} else {
-    nfds = (slot->server > slot->viewer ? slot->server : slot->viewer)+1;
+  if (!slot->server_initialized)
+    slot->server_initialized = socket_write_exact(slot->server, (char *)&client_init, sizeof(client_init)) > 0; // Send ClientInit to the server to start repeating
+
+	if (slot->server_initialized) {
 	  // Start the repeater loop (repeater between stdin/out and socket)
 	  while(true)
 	  {
@@ -177,7 +175,9 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 		    }
       }
 	  }
-  }
+  } else
+  		logp(ERROR, "do_repeater(): Writting the ClientInit message to server (socket=%d) returned socket error %d.", slot->server, errno);
+
 	/** When the thread exits **/
   if (server_closed && viewer_closed) FreeSlot(slot);
   else
