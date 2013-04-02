@@ -94,7 +94,7 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 	fd_set fds; 
 	CARD8 client_init = 1;
 
-	logp(DEBUG, "do_reapeater(): Starting repeater for ID %d, server_initialized=.", slot->code, slot->server_initialized);
+	logp(DEBUG, "do_reapeater(): Starting repeater for ID %d, server_initialized=%d.", slot->code, slot->server_initialized);
   if (!slot->server_initialized)
     slot->server_initialized = socket_write_exact(slot->server, (char *)&client_init, sizeof(client_init)) > 0; // Send ClientInit to the server to start repeating
 
