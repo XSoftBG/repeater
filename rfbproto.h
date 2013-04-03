@@ -121,3 +121,31 @@ typedef char rfbProtocolVersionMsg[13];	/* allow extra byte for null */
 #define rfbVncAuthOK 0
 #define rfbVncAuthFailed 1
 #define rfbVncAuthTooMany 2
+
+
+/*-----------------------------------------------------------------------------
+ * Client Initialisation Message
+ *
+ * Once the client and server are sure that they're happy to talk to one
+ * another, the client sends an initialisation message.  At present this
+ * message only consists of a boolean indicating whether the server should try
+ * to share the desktop by leaving other clients connected, or give exclusive
+ * access to this client by disconnecting all other clients.
+ */
+
+#define sz_rfbClientInitMsg 1
+
+
+/*-----------------------------------------------------------------------------
+ * Server Initialisation Message
+ *
+ * After the client initialisation message, the server sends one of its own.
+ * This tells the client the width and height of the server's framebuffer,
+ * its pixel format and the name associated with the desktop.
+ */
+
+#define sz_rfbPixelFormat 16
+#define sz_rfbServerInitMsg (8 + sz_rfbPixelFormat)
+
+
+

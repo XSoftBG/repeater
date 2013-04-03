@@ -94,11 +94,20 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 	fd_set fds; 
 	CARD8 client_init = 1;
 
-	logp(DEBUG, "do_reapeater(): Starting repeater for ID %d, server_initialized=%d.", slot->code, slot->server_initialized);
-  if (!slot->server_initialized)
-    slot->server_initialized = socket_write_exact(slot->server, (char *)&client_init, sizeof(client_init)) > 0; // Send ClientInit to the server to start repeating
+	logp(DEBUG, "do_reapeater(): Starting repeater for ID %d, server_init_msg=%d.", slot->code, slot->server_init_msg);
+  // Send ClientInit to the server to start repeating
+  if(!slot->server_init_msg && socket_write_exact(slot->server, (char *)&client_init, sz_rfbClientInitMsg) == sz_rfbClientInitMsg) {
+    logp(DEBUG, "Sent to server (socket=%d) ClientInitMsg", slot->server);
+    slot->server_init_msg = (char *)malloc(sz_rfbServerInitMsg);
+    if(socket_read_exact(slot->server, slot->server_init_msg, sz_rfbServerInitMsg) == sz_rfbServerInitMsg)
+    {
+      logp(DEBUG, "Receive from server (socket=%d) ServerInitMsg", slot->server);
+      serverbuf_len = sz_rfbServerInitMsg;
+      memcpy(serverbuf, slot->server_init_msg, sz_rfbServerInitMsg);
+    }
+  } 
 
-	if (slot->server_initialized) {
+	if (slot->server_init_msg) {
 	  // Start the repeater loop (repeater between stdin/out and socket)
 	  while(true)
 	  {
@@ -113,7 +122,6 @@ THREAD_CALL do_repeater(LPVOID lpParam)
           viewer_closed = server_closed = true;
           break;
 			  } 		
-
 			  /* server => viewer */ 
 			  if (FD_ISSET(slot->server, &fds)) { 
 				  len = ::socket_read(slot->server, serverbuf, sizeof(serverbuf)); 
@@ -125,7 +133,6 @@ THREAD_CALL do_repeater(LPVOID lpParam)
   					  break;
           }
 			  }
-
 			  /* viewer => server */ 
 			  if( FD_ISSET(slot->viewer, &fds) ) {
 				  len = ::socket_read(slot->viewer, viewerbuf, sizeof(viewerbuf));
@@ -149,7 +156,6 @@ THREAD_CALL do_repeater(LPVOID lpParam)
           viewer_closed = server_closed = true;
           break;
 		    } 		
-
 		    /* flush data in viewerbuffer to server */ 
 		    if( FD_ISSET(slot->server, &fds) && viewerbuf_len > 0 ) { 
 			    len = ::socket_write(slot->server, viewerbuf+viewerbuf_off, viewerbuf_len); 
@@ -161,7 +167,6 @@ THREAD_CALL do_repeater(LPVOID lpParam)
   					  break;
           }
 		    }
-
 		    /* flush data in serverbuffer to viewer */
 		    if( FD_ISSET(slot->viewer, &fds) && serverbuf_len > 0 ) { 
 			    len = ::socket_write(slot->viewer, serverbuf+serverbuf_off, serverbuf_len);
@@ -181,17 +186,10 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 	/** When the thread exits **/
   if (server_closed && viewer_closed) FreeSlot(slot);
   else
-  if (server_closed) { socket_close(slot->server); slot->server = INVALID_SOCKET; slot->server_initialized = false; } 
+  if (server_closed) { socket_close(slot->server); slot->server = INVALID_SOCKET; free(slot->server_init_msg); slot->server_init_msg = NULL; }
   else
-  if (viewer_closed) 
-  { 
-    socket_close(slot->viewer); 
-    slot->viewer = INVALID_SOCKET;
-    if( socket_write_exact(slot->server, (char *)&client_init, sizeof(client_init)) < 0)
-  		logp(ERROR, "do_repeater(): Writting the ClientInit message to server (socket=%d) returned socket error %d.", slot->server, errno);
-    slot->server_initialized = false;
-  }
-	logp(INFO, "Repeater thread closed (server_closed=%d, server_initialized=%d, viewer_closed=%d).", server_closed, slot->server_initialized, viewer_closed);
+  if (viewer_closed) { socket_close(slot->viewer); slot->viewer = INVALID_SOCKET; }
+	logp(INFO, "Repeater thread closed (server_closed=%d, server_init_msg=%d, viewer_closed=%d).", server_closed, slot->server_init_msg, viewer_closed);
 	return 0;
 }
 
@@ -204,7 +202,6 @@ void add_new_slot(SOCKET server_socket, SOCKET viewer_socket, unsigned char *cha
   slot->timestamp = (unsigned long)::time(NULL);
   memcpy(slot->challenge, challenge, CHALLENGESIZE);
   slot->code = code;
-  slot->next = NULL;
 
   repeaterslot *current = AddSlot(slot);
   if (current == NULL) {
@@ -227,8 +224,8 @@ void add_new_slot(SOCKET server_socket, SOCKET viewer_socket, unsigned char *cha
 
 bool socket_recv(SOCKET s, char * buff, socklen_t bufflen, const char *msg)
 {
-  if( socket_read_exact(s, buff, bufflen) < 0 ) {
-	  if( errno == ECONNRESET || errno == ENOTCONN ) {
+  if (socket_read_exact(s, buff, bufflen) < 0) {
+	  if (errno == ECONNRESET || errno == ENOTCONN) {
 		  logp(INFO, "Connection closed (socket=%d) while trying to read the %s.", s, msg);
 	  } else {
 		  logp(ERROR, "Reading the %s (socket=%d) return socket error %d.", msg, s, errno);
@@ -241,8 +238,8 @@ bool socket_recv(SOCKET s, char * buff, socklen_t bufflen, const char *msg)
 
 bool socket_send(SOCKET s, char * buff, socklen_t bufflen, const char *msg)
 {
-  if( socket_write_exact(s, buff, bufflen) < 0 ) {
-	  if( errno == ECONNRESET || errno == ENOTCONN ) {
+  if (socket_write_exact(s, buff, bufflen) < 0) {
+	  if (errno == ECONNRESET || errno == ENOTCONN) {
 		  logp(INFO, "Connection closed (socket=%d) while trying to write the %s.", s, msg);
 	  } else {
 		  logp(ERROR, "Writting the %s (socket=%d) returned socket error %d.", msg, s, errno);
@@ -324,7 +321,6 @@ THREAD_CALL server_listen(LPVOID lpParam)
 			}
 		}
 	}
-
 	notstopped = false;
 	socket_close(thread_params->sock);
 	log(INFO, "Server listening thread has exited.\n");
@@ -405,7 +401,6 @@ THREAD_CALL viewer_listen(LPVOID lpParam)
 			}
 		}
 	}
-
 	notstopped = false;
 	socket_close(thread_params->sock);
 	log(INFO, "Viewer listening thread has exited.");
@@ -425,18 +420,15 @@ void usage(char * appname)
 	fprintf(stderr, "  -viewer port Defines the listening port for incoming VNC viewer connections (default 5900).\n");
 	fprintf(stderr, "  -dump file name Defines the file to dump the json representation of current connections.\n");
 	fprintf(stderr, "  -loglevel level Defines the logger level - ERROR, FATAL, INFO, DEBUG (default INFO).\n");
-	fprintf(stderr, "  -iobuffer_size size Defines the input/output buffer size (default 16kb).\n");
+	fprintf(stderr, "  -iobuffer_size size Defines the input/output buffer size (default 16kb, min 128b).\n");
 	fprintf(stderr, "\nFor more information please visit http://code.google.com/p/vncrepeater or https://github.com/XSoftBG/repeater\n\n");
 	exit(1);
 }
 
 int main(int argc, char **argv)
 {
-	listener_thread_params *server_thread_params;
-	listener_thread_params *viewer_thread_params;
 	u_short server_port = 5500;
 	u_short viewer_port = 5900;
-	int t_result;
   char * dump_file = NULL;
 	thread_t hServerThread;
 	thread_t hViewerThread;
@@ -509,7 +501,7 @@ int main(int argc, char **argv)
 				}
 
         int buffer_sz = atoi(argv[(i+1)]);
-        if(buffer_sz <= 0) { usage( argv[0] ); return 1; }
+        if(buffer_sz <= 128) { usage( argv[0] ); return 1; }
         IOBUFFER_SIZE = buffer_sz;
         i++; 
       } 
@@ -539,9 +531,9 @@ int main(int argc, char **argv)
 	/* Trap signal in order to exit cleanlly */
 	signal(SIGINT, ExitRepeater);
 
-	server_thread_params = (listener_thread_params *)malloc(sizeof(listener_thread_params));
+  listener_thread_params * server_thread_params = (listener_thread_params *)malloc(sizeof(listener_thread_params));
 	memset(server_thread_params, 0, sizeof(listener_thread_params));
-	viewer_thread_params = (listener_thread_params *)malloc(sizeof(listener_thread_params));
+	listener_thread_params * viewer_thread_params = (listener_thread_params *)malloc(sizeof(listener_thread_params));
 	memset(viewer_thread_params, 0, sizeof(listener_thread_params));
 
 	server_thread_params->port = server_port;
@@ -549,7 +541,7 @@ int main(int argc, char **argv)
 
 	// Start multithreading...
 	// Initialize MutEx
-	t_result = mutex_init( &mutex_slots );
+	int t_result = mutex_init( &mutex_slots );
 	if( t_result != 0 ) {
 		logp(ERROR, "Failed to create mutex for repeater slots with error: %d", t_result );
 		notstopped = false;

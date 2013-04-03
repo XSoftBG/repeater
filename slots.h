@@ -31,12 +31,13 @@ typedef struct _repeaterslot
 {
 	SOCKET   server;
 	SOCKET   viewer;
-  bool     server_initialized;
+  char     *server_init_msg;
 	uint32_t timestamp;
 	uint32_t code;
 	unsigned char challenge[CHALLENGESIZE];
 
 	struct _repeaterslot * next;
+	struct _repeaterslot * prev;
 } repeaterslot;
 
 
@@ -46,18 +47,14 @@ extern unsigned char challenge_key[CHALLENGESIZE];
 
 extern mutex_t mutex_slots;
 
-/* Prototypes */
 void InitializeSlots( unsigned int max );
-void FreeSlots( void );
-
 repeaterslot * NewSlot( void );
 repeaterslot * AddSlot(repeaterslot *slot);
 void FreeSlot(repeaterslot *slot);
+void FreeSlots( void );
 void CleanupSlots( void );
 void ListSlots( void );
 std::string DumpSlots( void );
-repeaterslot * AddServer(SOCKET s, char * code);
-repeaterslot * AddViewer(SOCKET s, unsigned char * challenge);
 repeaterslot * FindSlotByChallenge(unsigned char * challenge);
 
 #endif

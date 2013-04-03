@@ -40,11 +40,9 @@ int errno;
  *****************************************************************************/
 int WinsockInitialize( void )
 {
-	WORD	wVersionRequested;
 	WSADATA	wsaData;
-
 	/* Use the MAKEWORD(lowbyte, highbyte) macro declared in Windef.h */
-	wVersionRequested = MAKEWORD(2, 2);
+	WORD wVersionRequested = MAKEWORD(2, 2);
 
 	if( WSAStartup(wVersionRequested, &wsaData) != 0 ) {
 		log(FATAL, "main(): WSAStartup failed.");
@@ -59,10 +57,7 @@ int WinsockInitialize( void )
 	return 1;
 }
 
-void WinsockFinalize( void )
-{
-	WSACleanup();
-}
+void WinsockFinalize( void ) { WSACleanup(); }
 
 #endif /* END WIN32 */
 
@@ -75,7 +70,6 @@ void WinsockFinalize( void )
 
 SOCKET create_listener_socket(u_short port)
 {
-	SOCKET              sock;
 	struct sockaddr_in  addr;
 	const int one = 1;
 
@@ -86,7 +80,7 @@ SOCKET create_listener_socket(u_short port)
 	addr.sin_addr.s_addr = INADDR_ANY;
 
 	/* Initialize the socket */
-	sock = socket(AF_INET, SOCK_STREAM, 0);
+	SOCKET sock = socket(AF_INET, SOCK_STREAM, 0);
 	if( sock < 0 ) {
 		logp(ERROR, "Failed to create a listening socket for port %d.", port);
 		return INVALID_SOCKET;
@@ -121,16 +115,16 @@ SOCKET create_listener_socket(u_short port)
 	return sock;
 }
 
-int socket_read(SOCKET s, char * buff, socklen_t bufflen)
+int socket_read(SOCKET s, char * buff, socklen_t bufflen, int flags)
 {
 	errno = 0;
-	const int bytes = recv(s, buff, bufflen, 0);
+	const int bytes = recv(s, buff, bufflen, flags);
 	if(bytes < 0) {
 #ifdef WIN32
 		errno = WSAGetLastError();
 #endif
     if (errno == EWOULDBLOCK || errno == EAGAIN) return 0;
-    logp(ERROR, "socket_read: socket: %d error: %d.", s, errno );
+    logp(ERROR, "socket_read: socket: %d error: %d.", s, errno);
 		return -1;
 	} else if(bytes == 0) {
 		errno = ENOTCONN;
@@ -159,29 +153,29 @@ int socket_write(SOCKET s, char * buff, socklen_t bufflen)
   return bytes;
 }
 
-int socket_read_exact(SOCKET s, char * buff, socklen_t bufflen)
+int socket_read_exact(SOCKET s, char * buff, socklen_t bufflen, struct timeval *tm, int flags)
 {
 	socklen_t currlen = bufflen;
 	fd_set read_fds;
 	int n;
 
 	while (currlen > 0) {
-		FD_ZERO( &read_fds);
-		FD_SET( s, &read_fds );
-			
-		n = select(s + 1, &read_fds, NULL, NULL, NULL); // Wait until some data can be read
+		FD_ZERO(&read_fds);
+		FD_SET(s, &read_fds);
+		n = select(s + 1, &read_fds, NULL, NULL, tm); // Wait until some data can be read or select tiemouted
 		if (n < 0) {
 #ifdef WIN32
 			errno = WSAGetLastError();
 #endif
+			logp(ERROR, "socket_read_exact: select() error: %d", errno);
 			return -1;
-		} else if (n > 2) {
-			log(ERROR, "socket error in select()");
-			return -1;
-		}
-		
-		if( FD_ISSET( s, &read_fds ) ) {
-			n = socket_read(s, buff, currlen);
+		} else if (n == 0) {
+			log(DEBUG, "socket_read_exact: select() timeouted");
+      return -2;
+    }
+	
+		if( FD_ISSET(s, &read_fds) ) {
+			n = socket_read(s, buff, currlen, flags);
 			if (n > 0) {
 				buff += n;
 				currlen -= n;
@@ -193,26 +187,26 @@ int socket_read_exact(SOCKET s, char * buff, socklen_t bufflen)
 	return bufflen;
 }
 
-int socket_write_exact(SOCKET s, char * buff, socklen_t bufflen)
+int socket_write_exact(SOCKET s, char * buff, socklen_t bufflen, struct timeval *tm)
 {
 	socklen_t currlen = bufflen;
 	fd_set write_fds;
 	int n;
 
 	while (currlen > 0) {
-		FD_ZERO( &write_fds );
-		FD_SET( s, &write_fds );
-		
-		n = select(s + 1, NULL, &write_fds, NULL, NULL); // Wait until some data can be read
+		FD_ZERO(&write_fds);
+		FD_SET(s, &write_fds);
+		n = select(s + 1, NULL, &write_fds, NULL, tm); // Wait until some data can be read or select tiemouted
 		if (n < 0) {
 #ifdef WIN32
 			errno = WSAGetLastError();
 #endif
+			logp(ERROR, "socket_write_exact: select() error: %d", errno);
 			return -1;
-		} else if(n > 2) {
-			log(ERROR, "socket error in select()");
-			return -1;
-		}
+		} else if (n == 0) {
+			log(DEBUG, "socket_write_exact: select() timeouted");
+      return -2;
+    }
 
 		n = socket_write(s, buff, bufflen);
 		if (n > 0) {
