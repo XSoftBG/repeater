@@ -105,6 +105,8 @@ THREAD_CALL do_repeater(LPVOID lpParam)
       serverbuf_len = sz_rfbServerInitMsg;
       memcpy(serverbuf, slot->server_init_msg, sz_rfbServerInitMsg);
     }
+    else
+      logp(DEBUG, "Error: %d while receiving from server (socket=%d) ", errno, slot->server);
   } 
 
 	if (slot->server_init_msg) {
