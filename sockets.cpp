@@ -134,10 +134,10 @@ int socket_read(SOCKET s, char * buff, socklen_t bufflen, int flags)
 	return bytes;
 }
 
-int socket_write(SOCKET s, char * buff, socklen_t bufflen)
+int socket_write(SOCKET s, char * buff, socklen_t bufflen, int flags)
 {
 	errno = 0;
-  const int bytes = send(s, buff, bufflen, 0); 
+  const int bytes = send(s, buff, bufflen, flags);
   if(bytes < 0) {
   #ifdef WIN32
     errno = WSAGetLastError();
@@ -187,7 +187,7 @@ int socket_read_exact(SOCKET s, char * buff, socklen_t bufflen, struct timeval *
 	return bufflen;
 }
 
-int socket_write_exact(SOCKET s, char * buff, socklen_t bufflen, struct timeval *tm)
+int socket_write_exact(SOCKET s, char * buff, socklen_t bufflen, struct timeval *tm, int flags)
 {
 	socklen_t currlen = bufflen;
 	fd_set write_fds;
@@ -208,7 +208,7 @@ int socket_write_exact(SOCKET s, char * buff, socklen_t bufflen, struct timeval 
       return -2;
     }
 
-		n = socket_write(s, buff, bufflen);
+		n = socket_write(s, buff, bufflen, flags);
 		if (n > 0) {
 			buff += n;
 			currlen -= n;

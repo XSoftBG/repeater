@@ -177,23 +177,14 @@ void CleanupSlots( void )
 
 	if (LockSlots("CleanupSlots()") == 0) {
 	  for(repeaterslot *current = Slots; current != NULL;) {
-      if (current->viewer == INVALID_SOCKET) {
-        if (socket_read_exact(current->server, (char *)&buf, 1, &tm, MSG_PEEK) == -1)
-				  logp(INFO, "Closing server (socket=%d) connection due to socket error number %d.", current->server, errno);
-        else {
-          current = current->next;
-				  continue;
-        }
-      } else if (current->server == INVALID_SOCKET) {
-        if (socket_read_exact(current->viewer, (char *)&buf, 1, &tm, MSG_PEEK) == -1)
-				  logp(INFO, "Closing viewer (socket=%d) connection due to socket error number %d.", current->viewer, errno);
-        else {
-          current = current->next;
-				  continue;
-        }
-      }
-      current = DisposeSlot(current);
-		  logp(DEBUG, "Slot has been freed. Allocated repeater slots: %d.", slotCount);
+      if (current->viewer == INVALID_SOCKET && socket_read_exact(current->server, (char *)&buf, 1, &tm, MSG_PEEK) == -1) {
+			  logp(INFO, "Closing server (socket=%d) connection due to socket error number %d.", current->server, errno);
+        current = DisposeSlot(current);
+      } else if (current->server == INVALID_SOCKET && socket_read_exact(current->viewer, (char *)&buf, 1, &tm, MSG_PEEK) == -1) {
+			  logp(INFO, "Closing viewer (socket=%d) connection due to socket error number %d.", current->viewer, errno);
+        current = DisposeSlot(current);
+      } else
+        current = current->next;
 	  }
 	  UnlockSlots("CleanupSlots()");
   }
