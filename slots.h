@@ -19,7 +19,6 @@
 //
 /////////////////////////////////////////////////////////////////////////////
 
-
 #ifndef _SLOTS_H
 #define _SLOTS_H
 
@@ -37,8 +36,6 @@ typedef struct _repeaterslot
 	struct _repeaterslot * prev;
 } repeaterslot;
 
-
-extern repeaterslot * Slots;
 extern unsigned char  challenge_key[CHALLENGESIZE];
 
 void InitializeSlots(unsigned int max);

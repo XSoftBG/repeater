@@ -24,14 +24,14 @@
 #ifndef WIN32
 #include <string.h>
 #endif
+#include <sstream>
+#include <assert.h>
 #include "logger.h"
 #include "sockets.h" /* SOCKET */
 #include "vncauth.h" /* CHALLENGESIZE */
 #include "repeater.h"
 #include "slots.h"
 #include "mutex.h"
-#include <sstream>
-#include <assert.h>
 
 repeaterslot *Slots;
 unsigned int  slotCount;
