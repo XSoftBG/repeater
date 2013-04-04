@@ -135,17 +135,3 @@ typedef char rfbProtocolVersionMsg[13];	/* allow extra byte for null */
 
 #define sz_rfbClientInitMsg 1
 
-
-/*-----------------------------------------------------------------------------
- * Server Initialisation Message
- *
- * After the client initialisation message, the server sends one of its own.
- * This tells the client the width and height of the server's framebuffer,
- * its pixel format and the name associated with the desktop.
- */
-
-#define sz_rfbPixelFormat 16
-#define sz_rfbServerInitMsg (8 + sz_rfbPixelFormat)
-
-
-

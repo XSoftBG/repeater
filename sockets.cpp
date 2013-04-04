@@ -71,7 +71,7 @@ void WinsockFinalize( void ) { WSACleanup(); }
 SOCKET create_listener_socket(u_short port)
 {
 	struct sockaddr_in  addr;
-	const int one = 1;
+	const char one = 1;
 
 	/* zero the struct before filling the fields */
 	memset(&addr, 0, sizeof(struct sockaddr_in));
@@ -81,31 +81,31 @@ SOCKET create_listener_socket(u_short port)
 
 	/* Initialize the socket */
 	SOCKET sock = socket(AF_INET, SOCK_STREAM, 0);
-	if( sock < 0 ) {
+	if (sock < 0) {
 		logp(ERROR, "Failed to create a listening socket for port %d.", port);
 		return INVALID_SOCKET;
 	}
 
 	/* Set Socket options */
 #ifdef WIN32
-	setsockopt( sock, SOL_SOCKET, SO_REUSEADDR, (char *)&one, sizeof( one ));
+	setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *)&one, sizeof(one));
 	/* Disable Nagle Algorithm */
-	setsockopt( sock, IPPROTO_TCP, TCP_NODELAY, (char *)&one, sizeof( one ));
+	setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (char *)&one, sizeof(one));
 #else
-	setsockopt( sock, SOL_SOCKET, SO_REUSEADDR, (void *)&one, sizeof( one ));
+	setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (void *)&one, sizeof(one));
 	/* Disable Nagle Algorithm */
-	setsockopt( sock, IPPROTO_TCP, TCP_NODELAY, (void *)&one, sizeof( one ));
+	setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (void *)&one, sizeof(one));
 #endif
 
 	/* Bind the socket to the port */
-	if( bind(sock, (struct sockaddr *)&addr, sizeof(struct sockaddr)) < 0 ) {
+	if (bind(sock, (struct sockaddr *)&addr, sizeof(struct sockaddr)) < 0) {
 		logp(ERROR, "Failed to bind socket on port %d.", port);
 		socket_close(sock);
 		return INVALID_SOCKET;
 	}
 
 	/* Start listening */
-	if( listen(sock, 5) < 0 ) {
+	if (listen(sock, 5) < 0) {
 		logp(ERROR, "Failed to start listening on port %d.", port);
 		socket_close(sock);
 		return INVALID_SOCKET;

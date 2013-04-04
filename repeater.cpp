@@ -58,16 +58,16 @@ bool ParseDisplay(char *display, char *phost, int hostlen, int *pport, unsigned 
 	char *colonpos = strchr(display, ':');
 	int tmp_code;
 
-	if( hostlen < (int)strlen(display) ) return false;
+	if (hostlen < (int)strlen(display)) return false;
 
-	if( colonpos == NULL ) return false;
+	if (colonpos == NULL) return false;
 
 	strncpy(phost, display, colonpos - display);
 	phost[colonpos - display]  = '\0';
 
 	memset(tmp_id, 0, sizeof(tmp_id));
-	if( sscanf(colonpos + 1, "%d", &tmp_code) != 1 ) return false;
-	if( sscanf(colonpos + 1, "%s", tmp_id) != 1 ) return false;
+	if (sscanf(colonpos + 1, "%d", &tmp_code) != 1) return false;
+	if (sscanf(colonpos + 1, "%s", tmp_id) != 1) return false;
 
 	// encrypt
 	memcpy(challenge, challenge_key, CHALLENGESIZE);
@@ -400,7 +400,6 @@ int main(int argc, char **argv)
 					usage( argv[0] );
 					return 1;
 				}
-
 				server_port = atoi( argv[(i+1)] );
 				if( argv[(i+1)][0] == '-' ) {
 					usage( argv[0] );
@@ -419,7 +418,6 @@ int main(int argc, char **argv)
 					usage( argv[0] );
 					return 1;
 				}
-
 				viewer_port = atoi( argv[(i+1)] );
 				if( argv[(i+1)][0] == '-' ) {
 					usage( argv[0] );
@@ -535,7 +533,6 @@ int main(int argc, char **argv)
         write (dump_fd, json.c_str(), json.length() );	
       close (dump_fd);
     }
-
 		/* Take a "nap" so CPU usage doesn't go up. */
 #ifdef WIN32
 		Sleep(5000000);
