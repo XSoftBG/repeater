@@ -162,8 +162,8 @@ repeaterslot * AddSlot(SOCKET server, SOCKET viewer, unsigned char *challenge, u
     if (Slots) {
       Slots->prev   = current;
 		  current->next = Slots;
-    } else
-  		Slots = current;
+    }
+		Slots = current;
 		log(DEBUG, "Create new slot");
 	} else if (current->server == INVALID_SOCKET && server != INVALID_SOCKET) {
 		current->server = server;
@@ -268,30 +268,29 @@ std::string DumpSlots()
   std::ostringstream oss (std::ostringstream::out);
   struct sockaddr_in  addr;
   socklen_t addrlen = sizeof(addr);
-	if( LockSlots("DumpSlots()") != 0 )
-		return oss.str();
-
   oss << "[\n";
-	for(repeaterslot *current = Slots; current != NULL; current = current->next) {
-    oss << "{";
-    oss << "\"Id\": " << '"' << current->code << '"';
-	  if( current->server != INVALID_SOCKET ) {
-      if( getpeername( (int)current->server, (struct sockaddr *)&addr, &addrlen) == 0 ) {
-        oss << ", \"addr\": " << '"' << inet_ntoa(addr.sin_addr) << '"';
-      } else {
-        log(ERROR,"getpeername() failed");
-      }
-      if ( current->viewer != INVALID_SOCKET ) {
-        if( getpeername( (int)current->viewer, (struct sockaddr *)&addr, &addrlen) == 0 ) {
-          oss << ", \"viewer_addr\": " << '"' << inet_ntoa(addr.sin_addr) << '"';
+	if( LockSlots("DumpSlots()") == 0 ) {
+	  for(repeaterslot *current = Slots; current != NULL; current = current->next) {
+      oss << "{";
+      oss << "\"Id\": " << '"' << current->code << '"';
+	    if( current->server != INVALID_SOCKET ) {
+        if( getpeername( (int)current->server, (struct sockaddr *)&addr, &addrlen) == 0 ) {
+          oss << ", \"addr\": " << '"' << inet_ntoa(addr.sin_addr) << '"';
         } else {
-          log(ERROR, "getpeername() failed");
+          log(ERROR,"getpeername() failed");
+        }
+        if ( current->viewer != INVALID_SOCKET ) {
+          if( getpeername( (int)current->viewer, (struct sockaddr *)&addr, &addrlen) == 0 ) {
+            oss << ", \"viewer_addr\": " << '"' << inet_ntoa(addr.sin_addr) << '"';
+          } else {
+            log(ERROR, "getpeername() failed");
+          }
         }
       }
-    }
-    oss << "}\n";
-	}
-	UnlockSlots("DumpSlots()");
+      oss << "}\n";
+	  }
+	  UnlockSlots("DumpSlots()");
+  }
   oss << "]\n";
 	log(DEBUG, "Dump current connections.");
   return oss.str();
