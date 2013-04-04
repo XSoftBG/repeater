@@ -162,8 +162,8 @@ repeaterslot * AddSlot(SOCKET server, SOCKET viewer, unsigned char *challenge, u
     if (Slots) {
       Slots->prev   = current;
 		  current->next = Slots;
-    }
-		Slots = current;
+    } else
+  		Slots = current;
 		log(DEBUG, "Create new slot");
 	} else if (current->server == INVALID_SOCKET && server != INVALID_SOCKET) {
 		current->server = server;
