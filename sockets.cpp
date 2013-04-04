@@ -100,11 +100,11 @@ SOCKET create_listener_socket(u_short port)
 	}
 
 	/* Set Socket options */
-	if( setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *)&one, sizeof(one)) != 0 )
+	if( setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)) != 0 )
 		logp(ERROR, "Failed to set socket option SO_REUSEADDR on port %d, error: %d.", port, getLastErrNo());
 
 	/* Disable Nagle Algorithm */
-	if( setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (char *)&one, sizeof(one)) != 0 )
+	if( setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one)) != 0 )
 		logp(ERROR, "Failed to set socket option TCP_NODELAY on port %d, error: %d.", port, getLastErrNo());
 
 	/* Bind the socket to the port */
@@ -168,19 +168,16 @@ int socket_read_exact(SOCKET s, char * buff, socklen_t bufflen, struct timeval *
 		if (n < 0) {
 			logp(ERROR, "socket_read_exact: select() error: %d", getLastErrNo());
 			return -1;
-		} else if (n == 0) {
-			log(DEBUG, "socket_read_exact: select() timeouted");
+		} else if (n == 0)
       return -2;
-    }
 	
 		if( FD_ISSET(s, &read_fds) ) {
 			n = socket_read(s, buff, currlen, flags);
 			if (n > 0) {
 				buff += n;
 				currlen -= n;
-			} else if (n < 0) {
+			} else if (n < 0)
 					return -1;
-				}
 		}
   }
 	return bufflen;
@@ -199,18 +196,15 @@ int socket_write_exact(SOCKET s, char * buff, socklen_t bufflen, struct timeval 
 		if (n < 0) {
 			logp(ERROR, "socket_write_exact: select() error: %d", getLastErrNo());
 			return -1;
-		} else if (n == 0) {
-			log(DEBUG, "socket_write_exact: select() timeouted");
+		} else if (n == 0)
       return -2;
-    }
 
 		n = socket_write(s, buff, bufflen, flags);
 		if (n > 0) {
 			buff += n;
 			currlen -= n;
-		} else if (n < 0) {
+		} else if (n < 0)
 			return -1;
-		}
 	}
 	return bufflen;
 }
@@ -224,7 +218,7 @@ SOCKET  socket_accept(SOCKET s, struct sockaddr * addr, socklen_t * addrlen)
 
 	// Attempt to set the new socket's options
 	// Disable Nagle Algorithm
-	if( setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (char *)&one, sizeof(one)) != 0) {
+	if( setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one)) != 0) {
 		if (getLastErrNo() == ENOTSOCK) return INVALID_SOCKET;
 		log(INFO, "Failed to disable Nagle Algorithm.");
 	} else
@@ -234,7 +228,7 @@ SOCKET  socket_accept(SOCKET s, struct sockaddr * addr, socklen_t * addrlen)
 #ifdef WIN32
 	u_long ioctlsocket_arg = 1;
 
-	if (ioctlsocket( sock, FIONBIO, &ioctlsocket_arg) != 0) {
+	if (ioctlsocket(sock, FIONBIO, &ioctlsocket_arg) != 0) {
 		log(ERROR, "Failed to set socket in non-blocking mode.");
 		socket_close( sock );
 		return INVALID_SOCKET;
