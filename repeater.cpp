@@ -98,7 +98,6 @@ THREAD_CALL do_repeater(LPVOID lpParam)
   if(!slot->server_init_msg && socket_write_exact(slot->server, (char *)&client_init, sz_rfbClientInitMsg) == sz_rfbClientInitMsg) {
     logp(DEBUG, "Sent to server (socket=%d) ClientInitMsg", slot->server);
     slot->server_init_msg = (char *)malloc(sz_rfbServerInitMsg);
-/*
     if(socket_read_exact(slot->server, slot->server_init_msg, sz_rfbServerInitMsg) == sz_rfbServerInitMsg)
     {
       logp(DEBUG, "Receive from server (socket=%d) ServerInitMsg", slot->server);
@@ -107,8 +106,7 @@ THREAD_CALL do_repeater(LPVOID lpParam)
     }
     else
       logp(DEBUG, "Error: %d while receiving from server (socket=%d) ", errno, slot->server);
-*/
-  } 
+ } 
 
 	if (slot->server_init_msg) {
 	  // Start the repeater loop (repeater between stdin/out and socket)
@@ -518,7 +516,7 @@ int main(int argc, char **argv)
 	/* Start */
 	logp(ERROR, "VNC Repeater [Version %s]", VNCREPEATER_VERSION);
 	log(INFO, "Copyright (C) 2010 Juan Pedro Gonzalez Gutierrez. Licensed under GPL v2.");
-	log(INFO, "Copyright (C) 2013 XSoft Ltd. - www.xsoftbg.com. Licensed under GPL v2.");
+	log(INFO, "Copyright (C) 2013 XSoft Ltd. - Andrey Andreev - www.xsoftbg.com. Licensed under GPL v2.");
 	log(INFO, "Get the latest version at http://code.google.com/p/vncrepeater/ or https://github.com/XSoftBG/repeater\n");
 
 	/* Initialize some variables */
