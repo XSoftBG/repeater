@@ -197,7 +197,7 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 void add_new_slot(SOCKET server_socket, SOCKET viewer_socket, unsigned char *challenge, uint32_t code)
 {
 	thread_t repeater_thread = 0; 
-  repeaterslot *current = AddSlot(server_socket, viewer_socket, challenge, code);
+  const repeaterslot *current = AddSlot(server_socket, viewer_socket, challenge, code);
   if (current) {
     if (current->server != INVALID_SOCKET && current->viewer != INVALID_SOCKET) {
       if (notstopped) {
@@ -366,8 +366,7 @@ THREAD_CALL viewer_listen(LPVOID lpParam)
 			    if( socket_send(conn, (char *)&auth_type, sizeof(auth_type), "auth type to viewer") ) {
   			    logp(DEBUG, "Authentication scheme sent to viewer (socket=%d).", conn);
 
-			      // We must send the 16 bytes challenge key.
-			      // In order for this to work the challenge must be always the same.
+			      // We must send the 16 bytes challenge key. In order for this to work the challenge must be always the same.
 			      if( socket_send(conn, (char *)challenge_key, CHALLENGESIZE, "challenge key to viewer") ) {
   			      logp(DEBUG, "Challenge sent to viewer (socket=%d).", conn);
 

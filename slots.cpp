@@ -32,13 +32,11 @@
 #include <sstream>
 #include <assert.h>
 
-repeaterslot * Slots;
-unsigned int slotCount;
-unsigned int max_slots;
-
+repeaterslot *Slots;
+unsigned int  slotCount;
+unsigned int  max_slots;
 unsigned char challenge_key[CHALLENGESIZE];
-
-mutex_t mutex_slots;
+mutex_t       mutex_slots;
 
 /*******************************************************************************
  *
@@ -83,21 +81,17 @@ void InitializeSlots( unsigned int max )
 repeaterslot * DisposeSlot(repeaterslot *slot)
 {
 	if (slot->server != INVALID_SOCKET) {
-		if (socket_close(slot->server) == -1) {
+		if (socket_close(slot->server) == -1)
 			logp(ERROR, "Server socket failed to close. Socket error = %d.", errno);
-		}
-		else {
+		else
 			log(DEBUG, "Server socket has been closed.");
-		}
 	}
 
 	if (slot->viewer != INVALID_SOCKET) {
-		if (socket_close(slot->viewer) == -1) {
+		if (socket_close(slot->viewer) == -1)
 			logp(ERROR, "Viewer socket failed to close. Socket error = %d.", errno);
-		}
-		else {
+		else
 			log(DEBUG, "Viewer socket has been closed.");
-		}
 	}
 	repeaterslot *next = slot->next;
 	if (slot->prev == NULL)
@@ -119,14 +113,13 @@ repeaterslot * DisposeSlot(repeaterslot *slot)
 
 void FreeSlots( void )
 {
-	if( LockSlots("FreeSlots()") != 0 )
-		return;
-
-	for(repeaterslot *current = Slots; current != NULL;) {
-    current = DisposeSlot(current);
-	}
-  assert(slotCount == 0);
-	UnlockSlots("FreeSlots()");
+	if( LockSlots("FreeSlots()") == 0 ) {
+	  for(repeaterslot *current = Slots; current != NULL;) {
+      current = DisposeSlot(current);
+	  }
+    assert(slotCount == 0);
+	  UnlockSlots("FreeSlots()");
+  }
 }
 
 repeaterslot * AddSlot(SOCKET server, SOCKET viewer, unsigned char *challenge, uint32_t code)
@@ -144,16 +137,19 @@ repeaterslot * AddSlot(SOCKET server, SOCKET viewer, unsigned char *challenge, u
 		return NULL;
 	}
 
-	repeaterslot *current = FindSlotByChallenge( challenge );
+	repeaterslot *current = FindSlotByChallenge(challenge);
 	if (current == NULL) {
 		/* This is a new slot, but slots already exist */
     current = (repeaterslot *)malloc( sizeof(repeaterslot) );
     memset(current, 0, sizeof(repeaterslot));
+		current->server    = server;
+		current->viewer    = viewer;
+		current->code      = code;
     current->timestamp = (unsigned long)::time(NULL);
     memcpy(current->challenge, challenge, CHALLENGESIZE);
 		slotCount++;
     if (Slots) {
-      Slots->prev = current;
+      Slots->prev   = current;
 		  current->next = Slots;
     }
 		Slots = current;
@@ -179,65 +175,61 @@ void CleanupSlots( void )
 	tm.tv_usec=100;
 	BYTE buf=0;
 
-	if (LockSlots("CleanupSlots()") != 0)
-		return;
-
-	for(repeaterslot *current = Slots; current != NULL;) {
-    if (current->viewer == INVALID_SOCKET) {
-      if (socket_read_exact(current->server, (char *)&buf, 1, &tm, MSG_PEEK) == -1)
-				logp(INFO, "Closing server (socket=%d) connection due to socket error number %d.", current->server, errno);
-      else {
-        current = current->next;
-				continue;
+	if (LockSlots("CleanupSlots()") == 0) {
+	  for(repeaterslot *current = Slots; current != NULL;) {
+      if (current->viewer == INVALID_SOCKET) {
+        if (socket_read_exact(current->server, (char *)&buf, 1, &tm, MSG_PEEK) == -1)
+				  logp(INFO, "Closing server (socket=%d) connection due to socket error number %d.", current->server, errno);
+        else {
+          current = current->next;
+				  continue;
+        }
+      } else if (current->server == INVALID_SOCKET) {
+        if (socket_read_exact(current->viewer, (char *)&buf, 1, &tm, MSG_PEEK) == -1)
+				  logp(INFO, "Closing viewer (socket=%d) connection due to socket error number %d.", current->viewer, errno);
+        else {
+          current = current->next;
+				  continue;
+        }
       }
-    } else if (current->server == INVALID_SOCKET) {
-      if (socket_read_exact(current->viewer, (char *)&buf, 1, &tm, MSG_PEEK) == -1)
-				logp(INFO, "Closing viewer (socket=%d) connection due to socket error number %d.", current->viewer, errno);
-      else {
-        current = current->next;
-				continue;
-      }
-    }
-    current = DisposeSlot(current);
-		logp(DEBUG, "Slot has been freed. Allocated repeater slots: %d.", slotCount);
-	}
-	UnlockSlots("CleanupSlots()");
+      current = DisposeSlot(current);
+		  logp(DEBUG, "Slot has been freed. Allocated repeater slots: %d.", slotCount);
+	  }
+	  UnlockSlots("CleanupSlots()");
+  }
 }
 
 repeaterslot * FindSlotByChallenge(unsigned char * challenge)
 {
-	if( LockSlots("FindSlotByChallenge()") != 0 )
-		return NULL;
-
-	log(DEBUG, "Trying to find a slot for a challenge ID.");
-	for(repeaterslot *current = Slots; current != NULL; current = current->next) {
-		if( memcmp(challenge, current->challenge, CHALLENGESIZE) == 0 ) {
-			log(DEBUG, "Found a slot assigned to the given challenge ID.");
-			UnlockSlots("FindSlotByChallenge()");
-			return current;
-		}
-	}
-	log(DEBUG, "Failed to find an assigned slot for the given Challenge ID. Probably a new ID.");
-	UnlockSlots("FindSlotByChallenge()");
+	if( LockSlots("FindSlotByChallenge()") == 0 ) {
+	  log(DEBUG, "Trying to find a slot for a challenge ID.");
+	  for(repeaterslot *current = Slots; current != NULL; current = current->next) {
+		  if( memcmp(challenge, current->challenge, CHALLENGESIZE) == 0 ) {
+			  log(DEBUG, "Found a slot assigned to the given challenge ID.");
+			  UnlockSlots("FindSlotByChallenge()");
+			  return current;
+		  }
+	  }
+	  log(DEBUG, "Failed to find an assigned slot for the given Challenge ID. Probably a new ID.");
+	  UnlockSlots("FindSlotByChallenge()");
+  }
 	return NULL;
 }
 
 void FreeSlot(repeaterslot *slot)
 {
-	if( LockSlots("FreeSlot()") != 0 )
-		return;
-
-	logp(DEBUG, "Trying to free slot... (Allocated repeater slots: %d)", slotCount);
-	for(repeaterslot *current = Slots; current != NULL; current = current->next) {
-		if ( memcmp(current->challenge, slot->challenge, CHALLENGESIZE) == 0 ) {
-      DisposeSlot(current);
-			UnlockSlots("FreeSlot()");
-			return;
-		}
-	}
-	log(FATAL, "Called FreeSlot() but no slot was found.");
-	UnlockSlots("FreeSlot()");
-	logp(DEBUG, "Allocated repeater slots: %d.", slotCount);
+	if( LockSlots("FreeSlot()") == 0 ) {
+	  logp(DEBUG, "Trying to free slot... (Allocated repeater slots: %d)", slotCount);
+	  for(repeaterslot *current = Slots; current != NULL; current = current->next) {
+		  if ( memcmp(current->challenge, slot->challenge, CHALLENGESIZE) == 0 ) {
+        DisposeSlot(current);
+			  UnlockSlots("FreeSlot()");
+			  return;
+		  }
+	  }
+	  logp(FATAL, "Called FreeSlot() but no slot was found. Allocated repeater slots: %d", slotCount);
+	  UnlockSlots("FreeSlot()");
+  }
 }
 
 void ListSlots( void )
@@ -274,7 +266,7 @@ std::string DumpSlots( void )
   struct sockaddr_in  addr;
   socklen_t addrlen = sizeof(addr);
 	if( LockSlots("DumpSlots()") != 0 )
-		return std::string();
+		return oss.str();
 
   oss << "[\n";
 	for(repeaterslot *current = Slots; current != NULL; current = current->next) {
