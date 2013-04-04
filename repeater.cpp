@@ -99,16 +99,14 @@ THREAD_CALL do_repeater(LPVOID lpParam)
     logp(DEBUG, "Sent to server (socket=%d) ClientInitMsg", slot->server);
     slot->server_init_msg = (char *)malloc(sz_rfbServerInitMsg);
     if(socket_read_exact(slot->server, slot->server_init_msg, sz_rfbServerInitMsg) == sz_rfbServerInitMsg)
-    {
       logp(DEBUG, "Receive from server (socket=%d) ServerInitMsg", slot->server);
-      serverbuf_len = sz_rfbServerInitMsg;
-      memcpy(serverbuf, slot->server_init_msg, sz_rfbServerInitMsg);
-    }
     else
       logp(DEBUG, "Error: %d while receiving from server (socket=%d) ", errno, slot->server);
- } 
+  }
 
 	if (slot->server_init_msg) {
+    serverbuf_len = sz_rfbServerInitMsg;
+    memcpy(serverbuf, slot->server_init_msg, sz_rfbServerInitMsg);
 	  // Start the repeater loop (repeater between stdin/out and socket)
 	  while(true)
 	  {
