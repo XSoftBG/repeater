@@ -25,7 +25,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
 #include <fcntl.h>
 #include <signal.h>
 
@@ -198,29 +197,21 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 void add_new_slot(SOCKET server_socket, SOCKET viewer_socket, unsigned char *challenge, uint32_t code)
 {
 	thread_t repeater_thread = 0; 
-  repeaterslot *slot = NewSlot();
-  slot->server = server_socket;
-  slot->viewer = viewer_socket;
-  slot->timestamp = (unsigned long)::time(NULL);
-  memcpy(slot->challenge, challenge, CHALLENGESIZE);
-  slot->code = code;
-
-  repeaterslot *current = AddSlot(slot);
-  if (current == NULL) {
-    free(slot);
-    socket_close(server_socket == INVALID_SOCKET ? current->viewer : current->server);
-  } else if (current->server != INVALID_SOCKET && current->viewer != INVALID_SOCKET) {
-    if (notstopped) {
-      if (thread_create(&repeater_thread, NULL, do_repeater, (LPVOID)current) != 0) {
-	      log(FATAL, "Unable to create the repeater thread.");
-	      notstopped = false;
+  repeaterslot *current = AddSlot(server_socket, viewer_socket, challenge, code);
+  if (current) {
+    if (current->server != INVALID_SOCKET && current->viewer != INVALID_SOCKET) {
+      if (notstopped) {
+        if (thread_create(&repeater_thread, NULL, do_repeater, (LPVOID)current) != 0) {
+          log(FATAL, "Unable to create the repeater thread.");
+          notstopped = false;
+        }
       }
-    }
-  } else {
+    } else {
       logp(DEBUG, "%s (socket=%d) waiting for %s to connect...", 
-           server_socket == INVALID_SOCKET ? "Viewer" : "Server",
-           server_socket == INVALID_SOCKET ? current->viewer : current->server, 
-           server_socket == INVALID_SOCKET ? "server" : "viewer");
+      server_socket == INVALID_SOCKET ? "Viewer" : "Server",
+      server_socket == INVALID_SOCKET ? current->viewer : current->server, 
+      server_socket == INVALID_SOCKET ? "server" : "viewer");
+    }
   }
 }
 
@@ -422,7 +413,8 @@ void usage(char * appname)
 	fprintf(stderr, "  -viewer port Defines the listening port for incoming VNC viewer connections (default 5900).\n");
 	fprintf(stderr, "  -dump file name Defines the file to dump the json representation of current connections.\n");
 	fprintf(stderr, "  -loglevel level Defines the logger level - ERROR, FATAL, INFO, DEBUG (default INFO).\n");
-	fprintf(stderr, "  -iobuffer_size size Defines the input/output buffer size (default 16kb, min 128b).\n");
+	fprintf(stderr, "  -iobuffer_size bytes Defines the input/output buffer size (default 16kb, min 128b).\n");
+	fprintf(stderr, "  -max_slots int Defines the max slots (repeaters) (default 50).\n");
 	fprintf(stderr, "\nFor more information please visit http://code.google.com/p/vncrepeater or https://github.com/XSoftBG/repeater\n\n");
 	exit(1);
 }
@@ -431,13 +423,14 @@ int main(int argc, char **argv)
 {
 	u_short server_port = 5500;
 	u_short viewer_port = 5900;
+  int max_slots = 50;
   char * dump_file = NULL;
 	thread_t hServerThread;
 	thread_t hViewerThread;
 
 	/* Arguments */
-	if( argc > 1 ) {
-		for( int i=1;i<argc;i++ )
+	if (argc > 1) {
+		for(int i = 1; i < argc; i++)
 		{
 			if( _stricmp( argv[i], "-server" ) == 0 ) {
 				/* Requires argument */
@@ -476,14 +469,12 @@ int main(int argc, char **argv)
 					usage( argv[0] );
 					return 1;
 				}
-
 				i++;
 			} else if ( _stricmp( argv[i], "-dump" ) == 0 ) {
         if( (i+i) == argc ) {
 					usage( argv[0] );
 					return 1;
 				}
-
 				dump_file = argv[(i+1)];
         i++; 
 			} else if ( _stricmp( argv[i], "-loglevel" ) == 0 ) {
@@ -491,7 +482,6 @@ int main(int argc, char **argv)
 					usage( argv[0] );
 					return 1;
 				}
-
 				char level = ::get_log_level(argv[(i+1)]);
         if(level == -1) { usage( argv[0] ); return 1; }
         ::logger_level = level;
@@ -501,10 +491,18 @@ int main(int argc, char **argv)
 					usage( argv[0] );
 					return 1;
 				}
-
         int buffer_sz = atoi(argv[(i+1)]);
         if(buffer_sz <= 128) { usage( argv[0] ); return 1; }
         IOBUFFER_SIZE = buffer_sz;
+        i++; 
+			} else if ( _stricmp( argv[i], "-max_slots" ) == 0 ) {
+        if( (i+i) == argc ) {
+					usage( argv[0] );
+					return 1;
+				}
+        int _max_slots = atoi(argv[(i+1)]);
+        if(_max_slots < 1) { usage( argv[0] ); return 1; }
+        max_slots = _max_slots;
         i++; 
       } 
       else {
@@ -528,7 +526,7 @@ int main(int argc, char **argv)
 
 	/* Initialize some variables */
 	notstopped = true;
-	InitializeSlots( 20 );
+	InitializeSlots(max_slots);
 
 	/* Trap signal in order to exit cleanlly */
 	signal(SIGINT, ExitRepeater);

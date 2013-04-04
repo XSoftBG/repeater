@@ -72,14 +72,6 @@ int UnlockSlots(const char * function_name)
 	return 0;
 }
 
-repeaterslot * NewSlot( void )
-{
-	repeaterslot * new_slot = (repeaterslot *)malloc( sizeof(repeaterslot) );
-	if (new_slot == NULL) log(ERROR, "Not enough memory to allocate a new slot.");
-  memset(new_slot, 0, sizeof(repeaterslot));
-	return new_slot;
-}
-
 void InitializeSlots( unsigned int max )
 {
 	Slots = NULL;
@@ -137,17 +129,13 @@ void FreeSlots( void )
 	UnlockSlots("FreeSlots()");
 }
 
-repeaterslot * AddSlot(repeaterslot *slot)
+repeaterslot * AddSlot(SOCKET server, SOCKET viewer, unsigned char *challenge, uint32_t code)
 {
 	if (LockSlots("AddSlot()") != 0)
 		return NULL;
 
-	if (slot->server == INVALID_SOCKET && slot->viewer == INVALID_SOCKET) {
+	if (server == INVALID_SOCKET && viewer == INVALID_SOCKET) {
 		log(ERROR, "Trying to allocate an empty slot.");
-		UnlockSlots("AddSlot()");
-		return NULL;
-	} else if (slot->next != NULL) {
-		log(ERROR, "Memory allocation problem detected while trying to add a slot.");
 		UnlockSlots("AddSlot()");
 		return NULL;
 	} else if (max_slots > 0 && max_slots == slotCount) {
@@ -156,35 +144,27 @@ repeaterslot * AddSlot(repeaterslot *slot)
 		return NULL;
 	}
 
-	repeaterslot *current;
-	if (Slots == NULL) {
-		/* There is no slot in use */
-		Slots = NewSlot();
-		if( Slots != NULL ) {
-			memcpy(Slots, slot, sizeof(repeaterslot));
-			Slots->prev = Slots->next = NULL;
-			slotCount++;
-		}
-    current = Slots;
-		log(DEBUG, "Create first new slot");
-	} else {
-		current = FindSlotByChallenge( slot->challenge );
-		if (current == NULL) {
-			/* This is a new slot, but slots already exist */
-      Slots->prev = slot;
-			slot->next = Slots;
-			Slots = slot;
-			slotCount++;
-  		log(DEBUG, "Create new slot");
-      current = Slots;
-		} else if (current->server == INVALID_SOCKET && slot->server != INVALID_SOCKET) {
-			current->server = slot->server;
-			current->code = slot->code;
-  		log(DEBUG, "update server_socket in the slot");
-		} else if (current->viewer == INVALID_SOCKET && slot->viewer != INVALID_SOCKET) {
-			current->viewer = slot->viewer;
-  		log(DEBUG, "update viewer_socket in the slot");
-		}
+	repeaterslot *current = FindSlotByChallenge( challenge );
+	if (current == NULL) {
+		/* This is a new slot, but slots already exist */
+    current = (repeaterslot *)malloc( sizeof(repeaterslot) );
+    memset(current, 0, sizeof(repeaterslot));
+    current->timestamp = (unsigned long)::time(NULL);
+    memcpy(current->challenge, challenge, CHALLENGESIZE);
+		slotCount++;
+    if (Slots) {
+      Slots->prev = current;
+		  current->next = Slots;
+    }
+		Slots = current;
+		log(DEBUG, "Create new slot");
+	} else if (current->server == INVALID_SOCKET && server != INVALID_SOCKET) {
+		current->server = server;
+		current->code = code;
+		log(DEBUG, "update server_socket in the slot");
+	} else if (current->viewer == INVALID_SOCKET && viewer != INVALID_SOCKET) {
+		current->viewer = viewer;
+		log(DEBUG, "update viewer_socket in the slot");
 	}
 	UnlockSlots("AddSlot()");
 	logp(DEBUG, "Allocated repeater slots: %d.", slotCount);
@@ -196,7 +176,7 @@ void CleanupSlots( void )
 {
 	struct timeval tm;
 	tm.tv_sec=0;
-	tm.tv_usec=50;
+	tm.tv_usec=100;
 	BYTE buf=0;
 
 	if (LockSlots("CleanupSlots()") != 0)

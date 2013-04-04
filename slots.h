@@ -48,8 +48,7 @@ extern unsigned char challenge_key[CHALLENGESIZE];
 extern mutex_t mutex_slots;
 
 void InitializeSlots( unsigned int max );
-repeaterslot * NewSlot( void );
-repeaterslot * AddSlot(repeaterslot *slot);
+repeaterslot * AddSlot(SOCKET server_socket, SOCKET viewer_socket, unsigned char *challenge, uint32_t code);
 void FreeSlot(repeaterslot *slot);
 void FreeSlots( void );
 void CleanupSlots( void );
