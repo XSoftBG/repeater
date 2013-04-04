@@ -84,7 +84,7 @@ int getLastErrNo()
 SOCKET create_listener_socket(u_short port)
 {
 	struct sockaddr_in  addr;
-	const char one = 1;
+	const int one = 1;
 
 	/* zero the struct before filling the fields */
 	memset(&addr, 0, sizeof(struct sockaddr_in));
@@ -218,7 +218,7 @@ int socket_write_exact(SOCKET s, char * buff, socklen_t bufflen, struct timeval 
 SOCKET  socket_accept(SOCKET s, struct sockaddr * addr, socklen_t * addrlen)
 {
 	SOCKET sock;
-	const char one = 1;
+	const int one = 1;
 
 	if ( (sock = accept(s, addr, addrlen)) == INVALID_SOCKET ) return INVALID_SOCKET;
 
