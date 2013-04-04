@@ -98,6 +98,7 @@ THREAD_CALL do_repeater(LPVOID lpParam)
   if(!slot->server_init_msg && socket_write_exact(slot->server, (char *)&client_init, sz_rfbClientInitMsg) == sz_rfbClientInitMsg) {
     logp(DEBUG, "Sent to server (socket=%d) ClientInitMsg", slot->server);
     slot->server_init_msg = (char *)malloc(sz_rfbServerInitMsg);
+/*
     if(socket_read_exact(slot->server, slot->server_init_msg, sz_rfbServerInitMsg) == sz_rfbServerInitMsg)
     {
       logp(DEBUG, "Receive from server (socket=%d) ServerInitMsg", slot->server);
@@ -106,6 +107,7 @@ THREAD_CALL do_repeater(LPVOID lpParam)
     }
     else
       logp(DEBUG, "Error: %d while receiving from server (socket=%d) ", errno, slot->server);
+*/
   } 
 
 	if (slot->server_init_msg) {
@@ -258,20 +260,16 @@ THREAD_CALL server_listen(LPVOID lpParam)
 	char *ip_addr;
 
 	thread_params->sock = create_listener_socket( thread_params->port );
-	if ( thread_params->sock == INVALID_SOCKET ) {
-		notstopped = false;
-	} else {
+	if (thread_params->sock == INVALID_SOCKET)
+    notstopped = false;
+	else
 		logp(DEBUG, "Listening for incoming server connections on port %d.", thread_params->port);
-	}
 
 	while(notstopped)
 	{
 		conn = socket_accept(thread_params->sock, (struct sockaddr *)&client, &socklen);
-		if( conn == INVALID_SOCKET ) {
-			if( notstopped )
-				logp(ERROR, "server_listen(): accept() failed, errno=%d", errno);
-			else
-				break;
+		if (conn == INVALID_SOCKET) {
+			if (notstopped) logp(ERROR, "server_listen(): accept() failed, errno=%d", errno);
 		} else {
 			ip_addr = inet_ntoa(client.sin_addr); /* IP Address for monitoring purposes */
 			logp(INFO, "Server (socket=%d) connection accepted from %s.", conn, ip_addr);
@@ -331,23 +329,19 @@ THREAD_CALL viewer_listen(LPVOID lpParam)
 	CARD32 auth_response;
 	CARD8 client_init;
 	unsigned char challenge[CHALLENGESIZE];
-	char * ip_addr;
+	char *ip_addr;
 
 	thread_params->sock = create_listener_socket( thread_params->port );
-	if ( thread_params->sock == INVALID_SOCKET ) {
+	if (thread_params->sock == INVALID_SOCKET)
 		notstopped = false;
-	} else {
-		logp(DEBUG, "Listening for incoming viewer connections on port %d.", thread_params->port);
-	}
+  else
+    logp(DEBUG, "Listening for incoming viewer connections on port %d.", thread_params->port);
 
 	while(notstopped)
 	{
 		conn = socket_accept(thread_params->sock, (struct sockaddr *)&client, &socklen);
-		if( conn == INVALID_SOCKET ) {
-			if( notstopped ) 
-				logp(ERROR, "viewer_listen(): accept() failed, errno=%d", errno);
-			else 
-				break;
+		if (conn == INVALID_SOCKET) {
+			if (notstopped) logp(ERROR, "viewer_listen(): accept() failed, errno=%d", errno);
 		} else {
 			ip_addr = inet_ntoa(client.sin_addr); /* IP Address for monitoring purposes */
 			logp(INFO, "Viewer (socket=%d) connection accepted from %s.", conn, ip_addr);
