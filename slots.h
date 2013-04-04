@@ -29,7 +29,6 @@ typedef struct _repeaterslot
 {
 	SOCKET   server;
 	SOCKET   viewer;
-  char     *server_init_msg;
 	uint32_t timestamp;
 	uint32_t code;
 	unsigned char challenge[CHALLENGESIZE];

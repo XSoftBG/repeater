@@ -47,7 +47,7 @@ mutex_t       mutex_slots;
 int LockSlots(const char * function_name)
 {
 	const int mutex_result = mutex_lock( &mutex_slots );
-	if( mutex_result != 0 ) {
+	if (mutex_result != 0) {
 		logp(ERROR, "Failed to lock mutex in %s with error %d.", function_name, mutex_result);
 		return -1;
 	}
@@ -71,7 +71,7 @@ int UnlockSlots(const char * function_name)
 	return 0;
 }
 
-void InitializeSlots( unsigned int max )
+void InitializeSlots(unsigned int max)
 {
 	Slots = NULL;
 	slotCount = 0;
@@ -116,14 +116,13 @@ repeaterslot * DisposeSlot(repeaterslot *slot)
 		slot->prev->next = next;
     if(next) next->prev = slot->prev;
   }
-  if (slot->server_init_msg) { free(slot->server_init_msg); slot->server_init_msg = NULL; }
 	free(slot);
 	slotCount--;
 	logp(DEBUG, "Slot has been freed. Allocated repeater slots: %d.", slotCount);
   return next;
 }
 
-void FreeSlots( void )
+void FreeSlots()
 {
 	if( LockSlots("FreeSlots()") == 0 ) {
 	  for(repeaterslot *current = Slots; current != NULL;) {
@@ -180,7 +179,7 @@ repeaterslot * AddSlot(SOCKET server, SOCKET viewer, unsigned char *challenge, u
 }
 
 /* Free any slot if the connection has been reseted by peer */
-void CleanupSlots( void )
+void CleanupSlots()
 {
 	struct timeval tm;
 	tm.tv_sec=0;
@@ -204,7 +203,7 @@ void CleanupSlots( void )
 
 repeaterslot * FindSlotByChallenge(unsigned char * challenge)
 {
-	if( LockSlots("FindSlotByChallenge()") == 0 ) {
+	if (LockSlots("FindSlotByChallenge()") == 0) {
 	  log(DEBUG, "Trying to find a slot for a challenge ID.");
 	  for(repeaterslot *current = Slots; current != NULL; current = current->next) {
 		  if( memcmp(challenge, current->challenge, CHALLENGESIZE) == 0 ) {
@@ -221,7 +220,7 @@ repeaterslot * FindSlotByChallenge(unsigned char * challenge)
 
 void FreeSlot(repeaterslot *slot)
 {
-	if( LockSlots("FreeSlot()") == 0 ) {
+	if (LockSlots("FreeSlot()") == 0) {
 	  logp(DEBUG, "Trying to free slot... (Allocated repeater slots: %d)", slotCount);
 	  for(repeaterslot *current = Slots; current != NULL; current = current->next) {
 		  if ( memcmp(current->challenge, slot->challenge, CHALLENGESIZE) == 0 ) {
@@ -235,35 +234,34 @@ void FreeSlot(repeaterslot *slot)
   }
 }
 
-void ListSlots( void )
+void ListSlots()
 {
   struct sockaddr_in  addr;
   socklen_t addrlen = sizeof(addr);
-	if( LockSlots("ListSlots()") != 0 )
-		return;
-
-	log(DEBUG, "Listing current connections.");
-	for(repeaterslot *current = Slots; current != NULL; current = current->next) {
-	  if (current->server != INVALID_SOCKET) {
-      if( getpeername( (int)current->server, (struct sockaddr *)&addr, &addrlen) == 0 )
-        logp(DEBUG, "server connected with id=%d from %s", current->code, inet_ntoa(addr.sin_addr));
-      else 
-        logp(ERROR, "getpeername() failed: %d", errno);
-
-      if (current->viewer != INVALID_SOCKET)
-        if( getpeername( (int)current->viewer, (struct sockaddr *)&addr, &addrlen) == 0 )
-          logp(DEBUG, "with viewer from %s", inet_ntoa(addr.sin_addr));
+	if (LockSlots("ListSlots()") == 0) {
+	  log(DEBUG, "Listing current connections.");
+	  for(repeaterslot *current = Slots; current != NULL; current = current->next) {
+	    if (current->server != INVALID_SOCKET) {
+        if( getpeername( (int)current->server, (struct sockaddr *)&addr, &addrlen) == 0 )
+          logp(DEBUG, "server connected with id=%d from %s", current->code, inet_ntoa(addr.sin_addr));
         else 
           logp(ERROR, "getpeername() failed: %d", errno);
-      else 
-        log(DEBUG, "without viewer");
-    }
-	}
-	log(DEBUG, "End of Listing");
-	UnlockSlots("ListSlots()");
+
+        if (current->viewer != INVALID_SOCKET)
+          if( getpeername( (int)current->viewer, (struct sockaddr *)&addr, &addrlen) == 0 )
+            logp(DEBUG, "with viewer from %s", inet_ntoa(addr.sin_addr));
+          else 
+            logp(ERROR, "getpeername() failed: %d", errno);
+        else 
+          log(DEBUG, "without viewer");
+      }
+	  }
+	  log(DEBUG, "End of Listing");
+	  UnlockSlots("ListSlots()");
+  }
 }
 
-std::string DumpSlots( void ) 
+std::string DumpSlots()
 {
   std::ostringstream oss (std::ostringstream::out);
   struct sockaddr_in  addr;
