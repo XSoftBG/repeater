@@ -128,6 +128,7 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 			  /* server => viewer */ 
 			  if (FD_ISSET(slot->server, &fds)) { 
 				  len = ::socket_read(slot->server, serverbuf, sizeof(serverbuf)); 
+  				logp(DEBUG, "do_repeater(): socket_server_read=%d", len);
 				  if (len > 0) {
 					  serverbuf_len += len; /* repeat */
             serverbuf_off  = 0;
@@ -139,6 +140,7 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 			  /* viewer => server */ 
 			  if( FD_ISSET(slot->viewer, &fds) ) {
 				  len = ::socket_read(slot->viewer, viewerbuf, sizeof(viewerbuf));
+  				logp(DEBUG, "do_repeater(): socket_viewer_read=%d", len);
 				  if (len > 0) {
 					  viewerbuf_len += len;  /* repeat */
             viewerbuf_off  = 0;
@@ -162,6 +164,7 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 		    /* flush data in viewerbuffer to server */ 
 		    if( FD_ISSET(slot->server, &fds) && viewerbuf_len > 0 ) { 
 			    len = ::socket_write(slot->server, viewerbuf+viewerbuf_off, viewerbuf_len); 
+  				logp(DEBUG, "do_repeater(): socket_server_write=%d", len);
 			    if (len > 0) {
 				    viewerbuf_len -= len;
             viewerbuf_off += len;
@@ -173,6 +176,7 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 		    /* flush data in serverbuffer to viewer */
 		    if( FD_ISSET(slot->viewer, &fds) && serverbuf_len > 0 ) { 
 			    len = ::socket_write(slot->viewer, serverbuf+serverbuf_off, serverbuf_len);
+  				logp(DEBUG, "do_repeater(): socket_viewer_write=%d", len);
 			    if (len > 0) {
 				    serverbuf_len -= len;
 				    serverbuf_off += len;
