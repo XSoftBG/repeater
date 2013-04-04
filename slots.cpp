@@ -94,14 +94,14 @@ repeaterslot * DisposeSlot(repeaterslot *slot)
 {
 	if (slot->server != INVALID_SOCKET) {
 		if (socket_close(slot->server) == -1)
-			logp(ERROR, "Server socket failed to close. Socket error = %d.", errno);
+			logp(ERROR, "Server socket failed to close. Socket error = %d.", getLastErrNo());
 		else
 			log(DEBUG, "Server socket has been closed.");
 	}
 
 	if (slot->viewer != INVALID_SOCKET) {
 		if (socket_close(slot->viewer) == -1)
-			logp(ERROR, "Viewer socket failed to close. Socket error = %d.", errno);
+			logp(ERROR, "Viewer socket failed to close. Socket error = %d.", getLastErrNo());
 		else
 			log(DEBUG, "Viewer socket has been closed.");
 	}
@@ -189,10 +189,10 @@ void CleanupSlots()
 	if (LockSlots("CleanupSlots()") == 0) {
 	  for(repeaterslot *current = Slots; current != NULL;) {
       if (current->viewer == INVALID_SOCKET && socket_read_exact(current->server, (char *)&buf, 1, &tm, MSG_PEEK) == -1) {
-			  logp(INFO, "Closing server (socket=%d) connection due to socket error number %d.", current->server, errno);
+			  logp(INFO, "Closing server (socket=%d) connection due to socket error number %d.", current->server, getLastErrNo());
         current = DisposeSlot(current);
       } else if (current->server == INVALID_SOCKET && socket_read_exact(current->viewer, (char *)&buf, 1, &tm, MSG_PEEK) == -1) {
-			  logp(INFO, "Closing viewer (socket=%d) connection due to socket error number %d.", current->viewer, errno);
+			  logp(INFO, "Closing viewer (socket=%d) connection due to socket error number %d.", current->viewer, getLastErrNo());
         current = DisposeSlot(current);
       } else
         current = current->next;
@@ -245,13 +245,13 @@ void ListSlots()
         if( getpeername( (int)current->server, (struct sockaddr *)&addr, &addrlen) == 0 )
           logp(DEBUG, "server connected with id=%d from %s", current->code, inet_ntoa(addr.sin_addr));
         else 
-          logp(ERROR, "getpeername() failed: %d", errno);
+          logp(ERROR, "getpeername() failed: %d", getLastErrNo());
 
         if (current->viewer != INVALID_SOCKET)
           if( getpeername( (int)current->viewer, (struct sockaddr *)&addr, &addrlen) == 0 )
             logp(DEBUG, "with viewer from %s", inet_ntoa(addr.sin_addr));
           else 
-            logp(ERROR, "getpeername() failed: %d", errno);
+            logp(ERROR, "getpeername() failed: %d", getLastErrNo());
         else 
           log(DEBUG, "without viewer");
       }

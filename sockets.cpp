@@ -21,18 +21,15 @@
 
 #include <string.h>
 #ifndef WIN32
-#include <sys/socket.h>
+#include <unistd.h>
 #include <netinet/tcp.h>
 #include <fcntl.h>
-#include <errno.h>
 #endif
 
 #include "logger.h"
 #include "sockets.h"
 
 #ifdef WIN32
-int errno;
-
 /*****************************************************************************
  *
  * Winsock specific functions
@@ -67,6 +64,22 @@ void WinsockFinalize( void ) { WSACleanup(); }
  * Common functions
  *
  *****************************************************************************/
+int getLastErrNo()
+{
+  if(errno)
+    return errno;
+#ifdef WIN32
+  else
+  if( ::GetLastError() > 0 )
+    return ::GetLastError();
+  else
+  if( ::WSAGetLastError() > 0 )
+    return ::WSAGetLastError();
+#endif
+  else
+    return 0;
+}
+
 
 SOCKET create_listener_socket(u_short port)
 {
@@ -82,49 +95,41 @@ SOCKET create_listener_socket(u_short port)
 	/* Initialize the socket */
 	SOCKET sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock < 0) {
-		logp(ERROR, "Failed to create a listening socket for port %d.", port);
+		logp(ERROR, "Failed to create a listening socket for port %d, error: %d.", port, getLastErrNo());
 		return INVALID_SOCKET;
 	}
 
 	/* Set Socket options */
-#ifdef WIN32
-	setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *)&one, sizeof(one));
+	if( setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *)&one, sizeof(one)) != 0 )
+		logp(ERROR, "Failed to set socket option SO_REUSEADDR on port %d, error: %d.", port, getLastErrNo());
+
 	/* Disable Nagle Algorithm */
-	setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (char *)&one, sizeof(one));
-#else
-	setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (void *)&one, sizeof(one));
-	/* Disable Nagle Algorithm */
-	setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (void *)&one, sizeof(one));
-#endif
+	if( setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (char *)&one, sizeof(one)) != 0 )
+		logp(ERROR, "Failed to set socket option TCP_NODELAY on port %d, error: %d.", port, getLastErrNo());
 
 	/* Bind the socket to the port */
 	if (bind(sock, (struct sockaddr *)&addr, sizeof(struct sockaddr)) < 0) {
-		logp(ERROR, "Failed to bind socket on port %d.", port);
+		logp(ERROR, "Failed to bind socket on port %d, error: %d.", port, getLastErrNo());
 		socket_close(sock);
 		return INVALID_SOCKET;
 	}
 
 	/* Start listening */
 	if (listen(sock, 5) < 0) {
-		logp(ERROR, "Failed to start listening on port %d.", port);
+		logp(ERROR, "Failed to start listening on port %d, error: %d.", port, getLastErrNo());
 		socket_close(sock);
 		return INVALID_SOCKET;
 	}
-
-	/* Return the SOCKET */
 	return sock;
 }
 
 int socket_read(SOCKET s, char * buff, socklen_t bufflen, int flags)
 {
-	errno = 0;
 	const int bytes = recv(s, buff, bufflen, flags);
 	if(bytes < 0) {
-#ifdef WIN32
-		errno = WSAGetLastError();
-#endif
-    if (errno == EWOULDBLOCK || errno == EAGAIN) return 0;
-    logp(ERROR, "socket_read: socket: %d error: %d.", s, errno);
+    int err = getLastErrNo();
+    if (err == EWOULDBLOCK || err == EAGAIN) return 0;
+    logp(ERROR, "socket_read: socket: %d error: %d.", s, err);
 		return -1;
 	} else if(bytes == 0) {
 		errno = ENOTCONN;
@@ -136,14 +141,11 @@ int socket_read(SOCKET s, char * buff, socklen_t bufflen, int flags)
 
 int socket_write(SOCKET s, char * buff, socklen_t bufflen, int flags)
 {
-	errno = 0;
   const int bytes = send(s, buff, bufflen, flags);
   if(bytes < 0) {
-  #ifdef WIN32
-    errno = WSAGetLastError();
-  #endif
-    if (errno == EWOULDBLOCK || errno == EAGAIN) return 0;
-    logp(ERROR, "socket_write: socket: %d error: %d.", s, errno );
+    int err = getLastErrNo();
+    if (err == EWOULDBLOCK || err == EAGAIN) return 0;
+    logp(ERROR, "socket_write: socket: %d error: %d.", s, err);
     return -1;
   } else if(bytes == 0) {
 		errno = ENOTCONN;
@@ -164,10 +166,7 @@ int socket_read_exact(SOCKET s, char * buff, socklen_t bufflen, struct timeval *
 		FD_SET(s, &read_fds);
 		n = select(s + 1, &read_fds, NULL, NULL, tm); // Wait until some data can be read or select tiemouted
 		if (n < 0) {
-#ifdef WIN32
-			errno = WSAGetLastError();
-#endif
-			logp(ERROR, "socket_read_exact: select() error: %d", errno);
+			logp(ERROR, "socket_read_exact: select() error: %d", getLastErrNo());
 			return -1;
 		} else if (n == 0) {
 			log(DEBUG, "socket_read_exact: select() timeouted");
@@ -198,10 +197,7 @@ int socket_write_exact(SOCKET s, char * buff, socklen_t bufflen, struct timeval 
 		FD_SET(s, &write_fds);
 		n = select(s + 1, NULL, &write_fds, NULL, tm); // Wait until some data can be read or select tiemouted
 		if (n < 0) {
-#ifdef WIN32
-			errno = WSAGetLastError();
-#endif
-			logp(ERROR, "socket_write_exact: select() error: %d", errno);
+			logp(ERROR, "socket_write_exact: select() error: %d", getLastErrNo());
 			return -1;
 		} else if (n == 0) {
 			log(DEBUG, "socket_write_exact: select() timeouted");
@@ -222,41 +218,29 @@ int socket_write_exact(SOCKET s, char * buff, socklen_t bufflen, struct timeval 
 SOCKET  socket_accept(SOCKET s, struct sockaddr * addr, socklen_t * addrlen)
 {
 	SOCKET sock;
-	const int one = 1;
-	errno = 0;
-#ifdef WIN32
-	u_long ioctlsocket_arg = 1;
-#endif
+	const char one = 1;
 
-	if( ( sock = accept(s, addr, addrlen) ) == INVALID_SOCKET ) {
-#ifdef WIN32
-		errno = WSAGetLastError();
-#endif
-		return INVALID_SOCKET;
-	}
+	if ( (sock = accept(s, addr, addrlen)) == INVALID_SOCKET ) return INVALID_SOCKET;
 
 	// Attempt to set the new socket's options
 	// Disable Nagle Algorithm
-	if( setsockopt( sock, IPPROTO_TCP, TCP_NODELAY, (char *)&one, sizeof(one)) == -1 ) {
-#ifdef WIN32
-		errno = WSAGetLastError();
-#endif
-		if( errno == ENOTSOCK )
-			return INVALID_SOCKET;
+	if( setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (char *)&one, sizeof(one)) != 0) {
+		if (getLastErrNo() == ENOTSOCK) return INVALID_SOCKET;
 		log(INFO, "Failed to disable Nagle Algorithm.");
-	} else {
+	} else
 		log(INFO, "Nagle Alorithm has been disabled.");
-	}
 
 	// Put the socket into non-blocking mode
 #ifdef WIN32
+	u_long ioctlsocket_arg = 1;
+
 	if (ioctlsocket( sock, FIONBIO, &ioctlsocket_arg) != 0) {
 		log(ERROR, "Failed to set socket in non-blocking mode.");
 		socket_close( sock );
 		return INVALID_SOCKET;
 	}
 #else
-	if (fcntl( sock, F_SETFL, O_NDELAY) != 0) {
+	if (fcntl(sock, F_SETFL, O_NDELAY) != 0) {
 		log(ERROR, "Failed to set socket in non-blocking mode.");
 		socket_close( sock );
 		return INVALID_SOCKET;
@@ -267,16 +251,11 @@ SOCKET  socket_accept(SOCKET s, struct sockaddr * addr, socklen_t * addrlen)
 
 int socket_close(SOCKET s)
 {
-	errno = 0;
 	shutdown(s, 2);
 #ifdef WIN32
-	if( closesocket(s) != 0 ) {
-		errno = WSAGetLastError();
+	return closesocket(s) != 0 ? -1 : 0;
 #else
-	if( close(s) != 0 ) {
+	return close(s) != 0 ? -1 : 0;
 #endif
-		return -1;
-	}
-	return 0;
 }
 

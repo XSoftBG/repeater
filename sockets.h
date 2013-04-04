@@ -23,23 +23,16 @@
 #include <windows.h>
 #include <winsock.h>
 #else
-#include <strings.h>
-#include <netdb.h>
-#include <unistd.h> 
 #include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h> 
-#include <sys/time.h>
-#include <errno.h>
 #endif
+#include <errno.h>
 
 /*****************************************************************************
  *
  * Defines for compatibility
  *
  *****************************************************************************/
-
-
 #ifndef INVALID_SOCKET
 #define INVALID_SOCKET -1
 #endif
@@ -70,12 +63,13 @@
 
 
 #ifdef WIN32
-extern int errno;
 typedef int socklen_t;
 #else
 typedef int SOCKET;
 typedef uint8_t	BYTE;
 #endif
+
+extern int getLastErrNo();
 
 
 /*****************************************************************************

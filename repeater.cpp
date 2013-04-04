@@ -27,6 +27,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <unistd.h> 
 
 #include "logger.h"
 #include "thread.h"
@@ -104,7 +105,7 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 			  FD_SET(slot->viewer, &fds); /** prepare for reading viewer input **/ 
 
 			  if (::select(nfds, &fds, NULL, NULL, NULL) < 0) {
-				  logp(ERROR, "do_repeater(): input select() failed, errno=%d", errno);
+				  logp(ERROR, "do_repeater(): input select() failed, errno=%d", getLastErrNo());
           break;
 			  } 		
 			  /* server => viewer */ 
@@ -133,7 +134,7 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 			  if (serverbuf_len > 0) FD_SET(slot->viewer, &fds); /** prepare for reading viewer output **/ 
 
 		    if (::select(nfds, NULL, &fds, NULL, NULL) < 0) {
-			    logp(ERROR, "do_repeater(): ouput select() failed, errno=%d", errno);
+			    logp(ERROR, "do_repeater(): ouput select() failed, errno=%d", getLastErrNo());
           break;
 		    } 		
 		    /* flush data in viewerbuffer to server */ 
@@ -157,7 +158,7 @@ THREAD_CALL do_repeater(LPVOID lpParam)
       }
 	  }
   } else
-  		logp(ERROR, "do_repeater(): Writting the ClientInit message to server (socket=%d) returned socket error %d.", slot->server, errno);
+  		logp(ERROR, "do_repeater(): Writting the ClientInit message to server (socket=%d) returned socket error %d.", slot->server, getLastErrNo());
 
 	/** When the thread exits **/
   FreeSlot(slot);
@@ -189,10 +190,10 @@ void add_new_slot(SOCKET server_socket, SOCKET viewer_socket, unsigned char *cha
 bool socket_recv(SOCKET s, char * buff, socklen_t bufflen, const char *msg)
 {
   if (socket_read_exact(s, buff, bufflen) < 0) {
-	  if (errno == ECONNRESET || errno == ENOTCONN) {
+	  if (getLastErrNo() == ECONNRESET || getLastErrNo() == ENOTCONN) {
 		  logp(INFO, "Connection closed (socket=%d) while trying to read the %s.", s, msg);
 	  } else {
-		  logp(ERROR, "Reading the %s (socket=%d) return socket error %d.", msg, s, errno);
+		  logp(ERROR, "Reading the %s (socket=%d) return socket error %d.", msg, s, getLastErrNo());
 	  }
 	  socket_close(s); 
 	  return false;
@@ -203,10 +204,10 @@ bool socket_recv(SOCKET s, char * buff, socklen_t bufflen, const char *msg)
 bool socket_send(SOCKET s, char * buff, socklen_t bufflen, const char *msg)
 {
   if (socket_write_exact(s, buff, bufflen) < 0) {
-	  if (errno == ECONNRESET || errno == ENOTCONN) {
+	  if (getLastErrNo() == ECONNRESET || getLastErrNo() == ENOTCONN) {
 		  logp(INFO, "Connection closed (socket=%d) while trying to write the %s.", s, msg);
 	  } else {
-		  logp(ERROR, "Writting the %s (socket=%d) returned socket error %d.", msg, s, errno);
+		  logp(ERROR, "Writting the %s (socket=%d) returned socket error %d.", msg, s, getLastErrNo());
 	  }
 	  socket_close(s);
 	  return false;
@@ -238,7 +239,7 @@ THREAD_CALL server_listen(LPVOID lpParam)
 	{
 		conn = socket_accept(thread_params->sock, (struct sockaddr *)&client, &socklen);
 		if (conn == INVALID_SOCKET) {
-			if (notstopped) logp(ERROR, "server_listen(): accept() failed, errno=%d", errno);
+			if (notstopped) logp(ERROR, "server_listen(): accept() failed, errno=%d", getLastErrNo());
 		} else {
 			ip_addr = inet_ntoa(client.sin_addr); /* IP Address for monitoring purposes */
 			logp(INFO, "Server (socket=%d) connection accepted from %s.", conn, ip_addr);
@@ -310,7 +311,7 @@ THREAD_CALL viewer_listen(LPVOID lpParam)
 	{
 		conn = socket_accept(thread_params->sock, (struct sockaddr *)&client, &socklen);
 		if (conn == INVALID_SOCKET) {
-			if (notstopped) logp(ERROR, "viewer_listen(): accept() failed, errno=%d", errno);
+			if (notstopped) logp(ERROR, "viewer_listen(): accept() failed, errno=%d", getLastErrNo());
 		} else {
 			ip_addr = inet_ntoa(client.sin_addr); /* IP Address for monitoring purposes */
 			logp(INFO, "Viewer (socket=%d) connection accepted from %s.", conn, ip_addr);

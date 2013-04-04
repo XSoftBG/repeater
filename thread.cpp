@@ -19,11 +19,9 @@
 //
 /////////////////////////////////////////////////////////////////////////////
 
+#include <errno.h>
 #include "thread.h"
 #include "logger.h"
-#ifndef WIN32
-#include <errno.h>
-#endif
 
 #ifndef WAIT_TIMEOUT
 #define WAIT_TIMEOUT ETIMEDOUT 
@@ -64,13 +62,13 @@ int thread_join( thread_t thread, unsigned int seconds)
 	struct timespec ts;
 
 	if( clock_gettime(CLOCK_REALTIME, &ts) == -1 ) {
-		rc = pthread_join( thread, NULL );
+		rc = pthread_join(thread, NULL);
 	} else {
 		ts.tv_sec += seconds;
 		rc = pthread_timedjoin_np( thread, NULL, &ts);
 	}
 #else
-	rc = WaitForSingleObject( thread, ( seconds * 1000 ) );
+	rc = WaitForSingleObject(thread, seconds * 1000);
 #endif
 	return rc;
 }
@@ -105,8 +103,7 @@ int thread_cleanup(thread_t thread, unsigned int seconds)
 
 int thread_terminate(thread_t thread)
 {
-	int rc;
-
+	int rc = 0;
 #ifdef WIN32
 	if( TerminateThread( thread, 0 ) == 0 ) {
 		rc = GetLastError();
