@@ -172,7 +172,9 @@ repeaterslot * AddSlot(SOCKET server, SOCKET viewer, unsigned char *challenge, u
 	} else if (current->viewer == INVALID_SOCKET && viewer != INVALID_SOCKET) {
 		current->viewer = viewer;
 		log(DEBUG, "update viewer_socket in the slot");
-	}
+	} else
+    current = NULL; // already exists repeater for this slot
+
 	UnlockSlots("AddSlot()");
 	logp(DEBUG, "Allocated repeater slots: %d.", slotCount);
 	return current;
