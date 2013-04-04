@@ -116,7 +116,8 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 			  FD_SET(slot->server, &fds); /** prepare for reading server input **/
 			  FD_SET(slot->viewer, &fds); /** prepare for reading viewer input **/ 
 
-			  if( select(nfds, &fds, NULL, NULL, NULL) < 0 ) {
+  		  log(ERROR, "do_repeater(): input selecting");
+			  if ( select(nfds, &fds, NULL, NULL, NULL) < 0 ) {
 				  logp(ERROR, "do_repeater(): input select() failed, errno=%d", errno);
           viewer_closed = server_closed = true;
           break;
@@ -134,7 +135,7 @@ THREAD_CALL do_repeater(LPVOID lpParam)
           }
 			  }
 			  /* viewer => server */ 
-			  if( FD_ISSET(slot->viewer, &fds) ) {
+			  if ( FD_ISSET(slot->viewer, &fds) ) {
 				  len = ::socket_read(slot->viewer, viewerbuf, sizeof(viewerbuf));
   				logp(DEBUG, "do_repeater(): socket_viewer_read=%d", len);
 				  if (len > 0) {
@@ -149,16 +150,17 @@ THREAD_CALL do_repeater(LPVOID lpParam)
 
       if (viewerbuf_len > 0 || serverbuf_len > 0) {
   		  FD_ZERO( &fds ); 
-			  FD_SET(slot->server, &fds); /** prepare for reading server output **/
-			  FD_SET(slot->viewer, &fds); /** prepare for reading viewer output **/ 
+			  if (viewerbuf_len > 0) FD_SET(slot->server, &fds); /** prepare for reading server output **/
+			  if (serverbuf_len > 0) FD_SET(slot->viewer, &fds); /** prepare for reading viewer output **/ 
 
-		    if( ::select(nfds, NULL, &fds, NULL, NULL) < 0 ) {
+  		  log(ERROR, "do_repeater(): output selecting");
+		    if ( ::select(nfds, NULL, &fds, NULL, NULL) < 0) {
 			    logp(ERROR, "do_repeater(): ouput select() failed, errno=%d", errno);
           viewer_closed = server_closed = true;
           break;
 		    } 		
 		    /* flush data in viewerbuffer to server */ 
-		    if( FD_ISSET(slot->server, &fds) && viewerbuf_len > 0 ) { 
+		    if ( FD_ISSET(slot->server, &fds) ) { 
 			    len = ::socket_write(slot->server, viewerbuf+viewerbuf_off, viewerbuf_len); 
   				logp(DEBUG, "do_repeater(): socket_server_write=%d", len);
 			    if (len > 0) {
@@ -170,7 +172,7 @@ THREAD_CALL do_repeater(LPVOID lpParam)
           }
 		    }
 		    /* flush data in serverbuffer to viewer */
-		    if( FD_ISSET(slot->viewer, &fds) && serverbuf_len > 0 ) { 
+		    if ( FD_ISSET(slot->viewer, &fds) ) { 
 			    len = ::socket_write(slot->viewer, serverbuf+serverbuf_off, serverbuf_len);
   				logp(DEBUG, "do_repeater(): socket_viewer_write=%d", len);
 			    if (len > 0) {
@@ -209,10 +211,10 @@ void add_new_slot(SOCKET server_socket, SOCKET viewer_socket, unsigned char *cha
         }
       }
     } else {
-      logp(DEBUG, "%s (socket=%d) waiting for %s to connect...", 
-      server_socket == INVALID_SOCKET ? "Viewer" : "Server",
-      server_socket == INVALID_SOCKET ? current->viewer : current->server, 
-      server_socket == INVALID_SOCKET ? "server" : "viewer");
+        logp(DEBUG, "%s (socket=%d) waiting for %s to connect...", 
+        server_socket == INVALID_SOCKET ? "Viewer" : "Server",
+        server_socket == INVALID_SOCKET ? current->viewer : current->server, 
+        server_socket == INVALID_SOCKET ? "server" : "viewer");
     }
   }
 }
@@ -533,36 +535,29 @@ int main(int argc, char **argv)
 	viewer_thread_params->port = viewer_port;
 
 	// Start multithreading...
-	// Initialize MutEx
-	int t_result = mutex_init( &mutex_slots );
-	if( t_result != 0 ) {
-		logp(ERROR, "Failed to create mutex for repeater slots with error: %d", t_result );
-		notstopped = false;
-	}
-
 	// Tying new threads ;)
-	if( notstopped ) {
-		if( thread_create(&hServerThread, NULL, server_listen, (LPVOID)server_thread_params) != 0 ) {
+	if (notstopped) {
+		if ( thread_create(&hServerThread, NULL, server_listen, (LPVOID)server_thread_params) != 0 ) {
 			log(FATAL, "Unable to create the thread to listen for servers.");
 			notstopped = false;
 		}
 	}
 
-	if( notstopped ) {
-		if( thread_create(&hViewerThread, NULL, viewer_listen, (LPVOID)viewer_thread_params) != 0 ) {
+	if (notstopped) {
+		if ( thread_create(&hViewerThread, NULL, viewer_listen, (LPVOID)viewer_thread_params) != 0 ) {
 			log(FATAL, "Unable to create the thread to listen for viewers.");
 			notstopped = false;
 		}
 	}
-  if( notstopped )
-  {
+
+  if (notstopped) {
     FILE *f = fopen( "pid.repeater", "w" );
     if(!f) perror("pid.repeater"), exit(1);
     fprintf(f, "%d\n", (int)getpid());
     fclose(f);
   } 
 	// Main loop
-	while( notstopped ) 
+	while (notstopped)
 	{ 
 		/* Clean slots: Free slots where the endpoint has disconnected */
 		CleanupSlots();
@@ -597,23 +592,13 @@ int main(int argc, char **argv)
 	free( viewer_thread_params );
 
 	/* Make sure the threads have finalized */
-	if( thread_cleanup(hServerThread, 30) != 0 ) {
-		log(ERROR, "The server listener thread doesn't seem to exit cleanlly.");
-	}
-	if( thread_cleanup(hViewerThread, 30) != 0 ) {
-		log(ERROR, "The viewer listener thread doesn't seem to exit cleanlly.");
-	}
+	if (thread_cleanup(hServerThread, 30) != 0) log(ERROR, "The server listener thread doesn't seem to exit cleanlly.");
+	if (thread_cleanup(hViewerThread, 30) != 0) log(ERROR, "The viewer listener thread doesn't seem to exit cleanlly.");
 
-	// Destroy mutex
-  t_result = mutex_destroy( &mutex_slots );
-	if( t_result != 0 ) {
-		 logp(ERROR, "Failed to destroy mutex for repeater slots with error: %d", t_result);
-	 }
-
+  FinalizeSlots(); 
 #ifdef WIN32
-	 // Cleanup Winsock.
-	 WinsockFinalize();
+  WinsockFinalize(); // Cleanup Winsock.
 #endif
-	 return 0;
+  return 0;
 }
 

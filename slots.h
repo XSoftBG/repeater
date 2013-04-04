@@ -23,9 +23,7 @@
 #ifndef _SLOTS_H
 #define _SLOTS_H
 
-#include "mutex.h"
 #include <string>
-
 
 typedef struct _repeaterslot
 {
@@ -42,18 +40,16 @@ typedef struct _repeaterslot
 
 
 extern repeaterslot * Slots;
+extern unsigned char  challenge_key[CHALLENGESIZE];
 
-extern unsigned char challenge_key[CHALLENGESIZE];
-
-extern mutex_t mutex_slots;
-
-void InitializeSlots( unsigned int max );
+void InitializeSlots(unsigned int max);
+void FinalizeSlots();
 repeaterslot * AddSlot(SOCKET server_socket, SOCKET viewer_socket, unsigned char *challenge, uint32_t code);
 void FreeSlot(repeaterslot *slot);
-void FreeSlots( void );
-void CleanupSlots( void );
-void ListSlots( void );
-std::string DumpSlots( void );
+void FreeSlots();
+void CleanupSlots();
+void ListSlots();
+std::string DumpSlots();
 repeaterslot * FindSlotByChallenge(unsigned char * challenge);
 
 #endif

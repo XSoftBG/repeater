@@ -29,6 +29,7 @@
 #include "vncauth.h" /* CHALLENGESIZE */
 #include "repeater.h"
 #include "slots.h"
+#include "mutex.h"
 #include <sstream>
 #include <assert.h>
 
@@ -76,6 +77,17 @@ void InitializeSlots( unsigned int max )
 	slotCount = 0;
 	max_slots = max;
 	vncRandomBytes( challenge_key );
+	const int t_result = mutex_init( &mutex_slots );
+	if (t_result != 0) {
+		logp(ERROR, "Failed to create mutex for repeater slots with error: %d", t_result);
+		notstopped = false;
+	}
+}
+
+void FinalizeSlots()
+{
+  const int t_result = mutex_destroy( &mutex_slots );
+  if (t_result != 0) logp(ERROR, "Failed to destroy mutex for repeater slots with error: %d", t_result);
 }
 
 repeaterslot * DisposeSlot(repeaterslot *slot)
