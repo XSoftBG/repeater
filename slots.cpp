@@ -273,21 +273,20 @@ std::string DumpSlots()
 	  for(repeaterslot *current = Slots; current != NULL; current = current->next) {
       oss << "{";
       oss << "\"Id\": " << '"' << current->code << '"';
-	    if( current->server != INVALID_SOCKET ) {
-        if( getpeername( (int)current->server, (struct sockaddr *)&addr, &addrlen) == 0 ) {
+	    if (current->server != INVALID_SOCKET) {
+        if (getpeername( (int)current->server, (struct sockaddr *)&addr, &addrlen) == 0)
           oss << ", \"addr\": " << '"' << inet_ntoa(addr.sin_addr) << '"';
-        } else {
+        else
           log(ERROR,"getpeername() failed");
-        }
-        if ( current->viewer != INVALID_SOCKET ) {
-          if( getpeername( (int)current->viewer, (struct sockaddr *)&addr, &addrlen) == 0 ) {
+
+        if (current->viewer != INVALID_SOCKET) {
+          if (getpeername( (int)current->viewer, (struct sockaddr *)&addr, &addrlen) == 0)
             oss << ", \"viewer_addr\": " << '"' << inet_ntoa(addr.sin_addr) << '"';
-          } else {
+          else
             log(ERROR, "getpeername() failed");
-          }
         }
       }
-      oss << "}\n";
+      oss << "}" << (current->next ? ",\n" : "\n");
 	  }
 	  UnlockSlots("DumpSlots()");
   }
