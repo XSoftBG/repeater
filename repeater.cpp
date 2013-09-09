@@ -54,6 +54,7 @@ typedef struct _listener_thread_params {
 
 bool ParseDisplay(char *display, char *phost, int hostlen, int *pport, unsigned char *challengedid) 
 {
+  logp(DEBUG, "ParseDisplay: '%s'", display);
 	unsigned char challenge[CHALLENGESIZE];
 	char tmp_id[MAX_HOST_NAME_LEN + 1];
 	char *colonpos = strchr(display, ':');
@@ -68,12 +69,14 @@ bool ParseDisplay(char *display, char *phost, int hostlen, int *pport, unsigned 
 
 	memset(tmp_id, 0, sizeof(tmp_id));
 	if (sscanf(colonpos + 1, "%d", &tmp_code) != 1) return false;
-	if (sscanf(colonpos + 1, "%s", tmp_id) != 1) return false;
+	if (sscanf(colonpos + 1, "%s", tmp_id) != 1)    return false;
 
 	// encrypt
+  memset(challenge, 0, CHALLENGESIZE);
 	memcpy(challenge, challenge_key, CHALLENGESIZE);
 	vncEncryptBytes(challenge, tmp_id);
 
+  memset(challengedid, 0, CHALLENGESIZE);
 	memcpy(challengedid, challenge, CHALLENGESIZE);
 	*pport = tmp_code;
 	return true;
@@ -247,7 +250,6 @@ THREAD_CALL server_listen(LPVOID lpParam)
 			// First thing is first: Get the repeater ID...
 			if( socket_recv(conn, host_id, MAX_HOST_NAME_LEN, "hostid from server") ) {
 		    // Check and cypher the ID
-		    memset(challenge, 0, CHALLENGESIZE);
 		    if( ParseDisplay(host_id, phost, MAX_HOST_NAME_LEN, (int *)&code, challenge) ) {
   		    logp(DEBUG, "Server (socket=%d) sent the host ID:%d.", conn, code);
 
@@ -278,7 +280,7 @@ THREAD_CALL server_listen(LPVOID lpParam)
 			    }
 		    }
         else
-			    log(ERROR, "server_listen(): Reading Proxy settings error");
+			    logp(ERROR, "server_listen(): Reading Proxy settings error %s", host_id);
 			}
 		}
 	}
